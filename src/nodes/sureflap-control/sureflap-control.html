@@ -1,0 +1,61 @@
+<script type="text/javascript">
+  RED.nodes.registerType('surepetcare-control', {
+    category: 'SureFlap',
+    color: '#667f91',
+    defaults: {
+      name: { value: '' },
+      config: { value: '', type: 'surepetcare-config', required: true },
+      deviceId: { value: '' },
+      lockState: { value: 0 },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'paw.svg',
+    label: function () {
+      return this.name || 'surepetcare control';
+    },
+    paletteLabel: 'surepetcare control',
+  });
+</script>
+
+<script type="text/html" data-template-name="surepetcare-control">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-config"><i class="fa fa-cog"></i> Config</label>
+    <input type="text" id="node-input-config" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-deviceId"><i class="fa fa-microchip"></i> Device ID</label>
+    <input type="text" id="node-input-deviceId" placeholder="Numeric device ID from GET /device" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-lockState"><i class="fa fa-lock"></i> Lock state</label>
+    <select id="node-input-lockState">
+      <option value="0">0 — Unlocked (both ways)</option>
+      <option value="1">1 — Locked in (entry only)</option>
+      <option value="2">2 — Locked out (exit only)</option>
+      <option value="3">3 — Locked (both ways)</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="surepetcare-control">
+  <p>Sets the lock state of a SureFlap cat flap.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt class="optional">payload.lockState <span class="property-type">number</span></dt>
+    <dd>Override the configured lock state: 0 unlocked, 1 locked-in, 2 locked-out, 3 locked</dd>
+    <dt class="optional">payload.deviceId <span class="property-type">string</span></dt>
+    <dd>Override the configured device ID</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload.deviceId <span class="property-type">string</span></dt>
+    <dd>Device ID that was targeted</dd>
+    <dt>payload.lockState <span class="property-type">number</span></dt>
+    <dd>Lock state that was applied</dd>
+  </dl>
+</script>

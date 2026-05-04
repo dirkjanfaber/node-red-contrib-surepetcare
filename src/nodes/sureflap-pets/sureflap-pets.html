@@ -1,0 +1,51 @@
+<script type="text/javascript">
+  RED.nodes.registerType('surepetcare-pets', {
+    category: 'SureFlap',
+    color: '#667f91',
+    defaults: {
+      name: { value: '' },
+      config: { value: '', type: 'surepetcare-config', required: true },
+      pollInterval: { value: 60, validate: RED.validators.number() },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'paw.svg',
+    label: function () {
+      return this.name || 'surepetcare pets';
+    },
+    paletteLabel: 'surepetcare pets',
+  });
+</script>
+
+<script type="text/html" data-template-name="surepetcare-pets">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-config"><i class="fa fa-cog"></i> Config</label>
+    <input type="text" id="node-input-config" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-pollInterval"><i class="fa fa-clock-o"></i> Poll interval (s)</label>
+    <input type="number" id="node-input-pollInterval" min="60" step="1" />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="surepetcare-pets">
+  <p>Polls the SurePetcare API for pet locations and emits one message per pet.</p>
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload.name <span class="property-type">string</span></dt>
+    <dd>Pet name</dd>
+    <dt>payload.location <span class="property-type">string</span></dt>
+    <dd><code>inside</code> or <code>outside</code></dd>
+    <dt>payload.where <span class="property-type">number</span></dt>
+    <dd>Raw value: 1 = inside, 2 = outside</dd>
+    <dt>payload.since <span class="property-type">string</span></dt>
+    <dd>ISO 8601 timestamp of last position change</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>Send any message to the input to trigger an immediate poll.
+  The node also polls automatically at the configured interval (minimum 60 s).</p>
+</script>
