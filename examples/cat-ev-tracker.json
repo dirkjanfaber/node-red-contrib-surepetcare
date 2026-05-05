@@ -1,0 +1,78 @@
+[
+  {
+    "id": "tab-cat-ev",
+    "type": "tab",
+    "label": "Cat EV Tracker",
+    "disabled": false,
+    "info": "Tracks Laban and Minoes via the SurePetcare API and represents them as virtual EVs on VRM.\n\nSetup:\n1. Configure the surepetcare-config node with your credentials\n2. Enter each cat's microchip ID as the VIN in the two victron-virtual nodes\n3. Set a custom display name for each EV in VRM"
+  },
+  {
+    "id": "surepetcare-cfg",
+    "type": "surepetcare-config",
+    "name": "SurePetcare"
+  },
+  {
+    "id": "cat-poller",
+    "type": "surepetcare-pets",
+    "z": "tab-cat-ev",
+    "name": "Cat Locations",
+    "config": "surepetcare-cfg",
+    "pollInterval": 60,
+    "x": 160,
+    "y": 160,
+    "wires": [["cat-ev-state-machine"]]
+  },
+  {
+    "id": "cat-ev-state-machine",
+    "type": "function",
+    "z": "tab-cat-ev",
+    "name": "Cat EV State Machine",
+    "func": "const name = msg.payload.name;\nconst isInside = msg.payload.location === 'inside';\n\n// % SoC change per 60s poll\nconst CHARGE_RATE = 0.5;   // full charge in ~3.3 h at home\nconst DRAIN_RATE  = 0.2;   // flat after ~8 h outside\n\nconst key = 'soc_' + name;\nlet soc = flow.get(key);\nif (soc === undefined) soc = 50;\n\nsoc = isInside\n    ? Math.min(100, soc + CHARGE_RATE)\n    : Math.max(0,   soc - DRAIN_RATE);\n\nflow.set(key, soc);\n\nconst rounded = parseFloat(soc.toFixed(1));\nconst chargingState = !isInside ? 0 : rounded >= 100 ? 3 : 2;\n// 0=Disconnected  2=Charging  3=Charged\n\nmsg.payload = {\n    AtSite:        isInside ? 1 : 0,\n    Soc:           rounded,\n    ChargingState: chargingState,\n    'Ac/Power':    isInside ? 2300 : 0,\n    RangeToGo:     Math.round(rounded * 3)\n};\nmsg.catName = name;\nreturn msg;",
+    "outputs": 1,
+    "x": 400,
+    "y": 160,
+    "wires": [["cat-router"]]
+  },
+  {
+    "id": "cat-router",
+    "type": "switch",
+    "z": "tab-cat-ev",
+    "name": "Route by cat",
+    "property": "catName",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "eq", "v": "Laban",  "vt": "str" },
+      { "t": "eq", "v": "Minoes", "vt": "str" }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 620,
+    "y": 160,
+    "wires": [["ev-laban"], ["ev-minoes"]]
+  },
+  {
+    "id": "ev-laban",
+    "type": "victron-virtual",
+    "z": "tab-cat-ev",
+    "name": "Laban",
+    "device": "ev",
+    "ev_vin": "",
+    "ev_battery_capacity": "75",
+    "x": 820,
+    "y": 100,
+    "wires": [[]]
+  },
+  {
+    "id": "ev-minoes",
+    "type": "victron-virtual",
+    "z": "tab-cat-ev",
+    "name": "Minoes",
+    "device": "ev",
+    "ev_vin": "",
+    "ev_battery_capacity": "75",
+    "x": 820,
+    "y": 220,
+    "wires": [[]]
+  }
+]
