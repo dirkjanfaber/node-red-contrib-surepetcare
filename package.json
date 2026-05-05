@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^25.6.0",
     "@types/node-red-node-test-helper": "^0.3.5",
     "axios-mock-adapter": "^1.22.0",
     "copyfiles": "^2.4.1",
