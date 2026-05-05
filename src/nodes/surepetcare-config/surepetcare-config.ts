@@ -1,13 +1,13 @@
 import { randomUUID } from 'crypto';
 import { NodeAPI, NodeDef } from 'node-red';
-import { SurepetcareAPI } from '../../lib/sureflap-api';
+import { SurepetcareAPI } from '../../lib/surepetcare-api';
 
-interface SureflapConfigNodeDef extends NodeDef {
+interface SurepetcareConfigNodeDef extends NodeDef {
   name: string;
 }
 
 export = function (RED: NodeAPI) {
-  function SureflapConfigNode(this: any, config: SureflapConfigNodeDef) {
+  function SurepetcareConfigNode(this: any, config: SurepetcareConfigNodeDef) {
     RED.nodes.createNode(this, config);
 
     const creds = (this.credentials || {}) as {
@@ -29,7 +29,7 @@ export = function (RED: NodeAPI) {
     this.getAPI = () => api;
   }
 
-  RED.nodes.registerType('surepetcare-config', SureflapConfigNode, {
+  RED.nodes.registerType('surepetcare-config', SurepetcareConfigNode, {
     credentials: {
       email: { type: 'text' },
       password: { type: 'password' },

@@ -1,9 +1,11 @@
 import helper from 'node-red-node-test-helper';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sureflapConfig = require('../nodes/sureflap-config/sureflap-config');
+const surepetcareConfig = require('../nodes/surepetcare-config/surepetcare-config');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sureflapPets = require('../nodes/sureflap-pets/sureflap-pets');
-import { SurepetcareBackend } from '../types/sureflap';
+const surepetcarePets = require('../nodes/surepetcare-pets/surepetcare-pets');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { SurepetcareAPI } = require('../lib/surepetcare-api');
+import { SurepetcareBackend } from '../types/surepetcare';
 
 helper.init(require.resolve('node-red'));
 
@@ -19,7 +21,7 @@ function makeFlow() {
       type: 'surepetcare-pets',
       name: 'My Pets',
       config: 'cfg1',
-      pollInterval: 0, // 0 * 1000 = 0ms → no timer
+      pollInterval: 0, // 0 * 1000 = 0ms -> no timer
       wires: [['n2']],
     },
     { id: 'n2', type: 'helper' },
@@ -48,14 +50,14 @@ describe('surepetcare-pets node', () => {
   });
 
   it('should be loaded', async () => {
-    await helper.load([sureflapConfig, sureflapPets], makeFlow());
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const n1 = helper.getNode('n1');
     expect(n1).toBeTruthy();
     expect(n1.type).toBe('surepetcare-pets');
   });
 
   it('should emit one message per pet on poll', async () => {
-    await helper.load([sureflapConfig, sureflapPets], makeFlow());
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n1 = helper.getNode('n1') as any;
@@ -79,7 +81,7 @@ describe('surepetcare-pets node', () => {
   });
 
   it('should set status to green on successful poll', async () => {
-    await helper.load([sureflapConfig, sureflapPets], makeFlow());
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n1 = helper.getNode('n1') as any;
@@ -92,7 +94,7 @@ describe('surepetcare-pets node', () => {
 
   it('should set status to red and emit node.error on API failure', async () => {
     const failingAPI = { ...mockAPI, getPets: jest.fn().mockRejectedValue(new Error('Network failure')) };
-    await helper.load([sureflapConfig, sureflapPets], makeFlow());
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => failingAPI;
     const n1 = helper.getNode('n1') as any;
@@ -104,7 +106,7 @@ describe('surepetcare-pets node', () => {
   });
 
   it('should trigger poll when input message received', async () => {
-    await helper.load([sureflapConfig, sureflapPets], makeFlow());
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n2 = helper.getNode('n2');
@@ -113,5 +115,23 @@ describe('surepetcare-pets node', () => {
     const msgReceived = new Promise<void>(resolve => n2.on('input', () => resolve()));
     n1.receive({});
     await msgReceived;
+  });
+
+  it('should poll immediately on startup when pollInterval > 0', async () => {
+    jest.spyOn(SurepetcareAPI.prototype, 'authenticate').mockResolvedValue(undefined);
+    jest.spyOn(SurepetcareAPI.prototype, 'getPets').mockResolvedValue([]);
+
+    const flow = [
+      { id: 'cfg1', type: 'surepetcare-config', credentials: { email: 'test@example.com', password: 'secret' } },
+      { id: 'n1', type: 'surepetcare-pets', config: 'cfg1', pollInterval: 3600, wires: [['n2']] },
+      { id: 'n2', type: 'helper' },
+    ];
+
+    await helper.load([surepetcareConfig, surepetcarePets], flow);
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    expect(SurepetcareAPI.prototype.getPets).toHaveBeenCalled();
+
+    jest.restoreAllMocks();
   });
 });

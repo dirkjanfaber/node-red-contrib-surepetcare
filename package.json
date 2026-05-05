@@ -11,20 +11,34 @@
   ],
   "author": "Dirk-Jan Faber",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dirkjanfaber/node-red-contrib-surepetcare.git"
+  },
+  "homepage": "https://github.com/dirkjanfaber/node-red-contrib-surepetcare#readme",
+  "bugs": {
+    "url": "https://github.com/dirkjanfaber/node-red-contrib-surepetcare/issues"
+  },
+  "files": [
+    "dist/",
+    "examples/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc && copyfiles -u 2 \"src/nodes/**/*.html\" \"src/nodes/**/icons/*.svg\" dist/nodes/",
     "build:watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run build"
+    "prepack": "npm run build"
   },
   "node-red": {
     "version": ">=2.0.0",
     "nodes": {
-      "surepetcare-config": "dist/nodes/sureflap-config/sureflap-config.js",
-      "surepetcare-pets": "dist/nodes/sureflap-pets/sureflap-pets.js",
-      "surepetcare-control": "dist/nodes/sureflap-control/sureflap-control.js"
+      "surepetcare-config": "dist/nodes/surepetcare-config/surepetcare-config.js",
+      "surepetcare-pets": "dist/nodes/surepetcare-pets/surepetcare-pets.js",
+      "surepetcare-control": "dist/nodes/surepetcare-control/surepetcare-control.js"
     }
   },
   "dependencies": {

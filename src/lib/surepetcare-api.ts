@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { Device, LockState, Pet, SurepetcareBackend, SurepetcareCredentials } from '../types/sureflap';
+import { Device, LockState, Pet, SurepetcareBackend, SurepetcareCredentials } from '../types/surepetcare';
 
 const BASE_URL = 'https://app.api.surehub.io/api';
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;

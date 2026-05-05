@@ -1,6 +1,6 @@
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
-import { SurepetcareAPI } from '../lib/sureflap-api';
+import { SurepetcareAPI } from '../lib/surepetcare-api';
 
 const BASE_URL = 'https://app.api.surehub.io/api';
 

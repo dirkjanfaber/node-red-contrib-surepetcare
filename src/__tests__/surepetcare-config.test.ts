@@ -1,6 +1,6 @@
 import helper from 'node-red-node-test-helper';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sureflapConfig = require('../nodes/sureflap-config/sureflap-config');
+const surepetcareConfig = require('../nodes/surepetcare-config/surepetcare-config');
 
 helper.init(require.resolve('node-red'));
 
@@ -20,7 +20,7 @@ describe('surepetcare-config node', () => {
         credentials: { email: 'test@example.com', password: 'secret' },
       },
     ];
-    await helper.load(sureflapConfig, flow);
+    await helper.load(surepetcareConfig, flow);
     const cfg = helper.getNode('cfg1');
     expect(cfg).toBeTruthy();
     expect(cfg.name).toBe('My Flap');
@@ -34,12 +34,12 @@ describe('surepetcare-config node', () => {
         credentials: { email: 'test@example.com', password: 'secret' },
       },
     ];
-    await helper.load(sureflapConfig, flow);
+    await helper.load(surepetcareConfig, flow);
     const cfg = helper.getNode('cfg1') as any;
     expect(typeof cfg.getAPI).toBe('function');
   });
 
-  it('getAPI() returns a SureflapCloudAPI instance', async () => {
+  it('getAPI() returns a SurepetcareAPI instance', async () => {
     const flow = [
       {
         id: 'cfg1',
@@ -47,7 +47,7 @@ describe('surepetcare-config node', () => {
         credentials: { email: 'test@example.com', password: 'secret' },
       },
     ];
-    await helper.load(sureflapConfig, flow);
+    await helper.load(surepetcareConfig, flow);
     const cfg = helper.getNode('cfg1') as any;
     const api = cfg.getAPI();
     expect(typeof api.authenticate).toBe('function');

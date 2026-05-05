@@ -1,13 +1,13 @@
 import { NodeAPI, NodeDef } from 'node-red';
-import { SurepetcareBackend } from '../../types/sureflap';
+import { SurepetcareBackend } from '../../types/surepetcare';
 
-interface SureflapPetsNodeDef extends NodeDef {
+interface SurepetcarePetsNodeDef extends NodeDef {
   config: string;
   pollInterval: number;
 }
 
 export = function (RED: NodeAPI) {
-  function SureflapPetsNode(this: any, config: SureflapPetsNodeDef) {
+  function SurepetcarePetsNode(this: any, config: SurepetcarePetsNodeDef) {
     RED.nodes.createNode(this, config);
 
     const configNode = RED.nodes.getNode(config.config) as any;
@@ -39,6 +39,7 @@ export = function (RED: NodeAPI) {
     this.on('input', () => this.poll());
 
     if (intervalMs > 0) {
+      this.poll();
       timer = setInterval(() => this.poll(), intervalMs);
     }
 
@@ -49,5 +50,5 @@ export = function (RED: NodeAPI) {
     this.status({ fill: 'yellow', shape: 'ring', text: 'idle' });
   }
 
-  RED.nodes.registerType('surepetcare-pets', SureflapPetsNode);
+  RED.nodes.registerType('surepetcare-pets', SurepetcarePetsNode);
 };

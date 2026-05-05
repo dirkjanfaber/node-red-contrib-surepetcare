@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Node-RED Forum
+    url: https://discourse.nodered.org/
+    about: Ask general Node-RED questions on the community forum
+  - name: SurePetcare Support
+    url: https://www.surepetcare.com/support
+    about: For issues with your SurePetcare account or hardware

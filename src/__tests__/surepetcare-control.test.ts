@@ -1,9 +1,9 @@
 import helper from 'node-red-node-test-helper';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sureflapConfig = require('../nodes/sureflap-config/sureflap-config');
+const surepetcareConfig = require('../nodes/surepetcare-config/surepetcare-config');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sureflapControl = require('../nodes/sureflap-control/sureflap-control');
-import { SurepetcareBackend } from '../types/sureflap';
+const surepetcareControl = require('../nodes/surepetcare-control/surepetcare-control');
+import { SurepetcareBackend } from '../types/surepetcare';
 
 helper.init(require.resolve('node-red'));
 
@@ -48,14 +48,14 @@ describe('surepetcare-control node', () => {
   });
 
   it('should be loaded', async () => {
-    await helper.load([sureflapConfig, sureflapControl], makeFlow());
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow());
     const n1 = helper.getNode('n1');
     expect(n1).toBeTruthy();
     expect(n1.type).toBe('surepetcare-control');
   });
 
   it('should call setLockState with node-configured lockState on input', async () => {
-    await helper.load([sureflapConfig, sureflapControl], makeFlow('10', 3));
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 3));
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n2 = helper.getNode('n2');
@@ -69,7 +69,7 @@ describe('surepetcare-control node', () => {
   });
 
   it('should use msg.payload.lockState to override node config', async () => {
-    await helper.load([sureflapConfig, sureflapControl], makeFlow('10', 0));
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n2 = helper.getNode('n2');
@@ -83,7 +83,7 @@ describe('surepetcare-control node', () => {
   });
 
   it('should use msg.payload.deviceId to override node config', async () => {
-    await helper.load([sureflapConfig, sureflapControl], makeFlow('10', 1));
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 1));
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n2 = helper.getNode('n2');
@@ -96,7 +96,7 @@ describe('surepetcare-control node', () => {
   });
 
   it('should set status green on success', async () => {
-    await helper.load([sureflapConfig, sureflapControl], makeFlow('10', 0));
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
     const n1 = helper.getNode('n1') as any;
@@ -112,7 +112,7 @@ describe('surepetcare-control node', () => {
 
   it('should set status red and call node.error on failure', async () => {
     const failingAPI = { ...mockAPI, setLockState: jest.fn().mockRejectedValue(new Error('API down')) };
-    await helper.load([sureflapConfig, sureflapControl], makeFlow('10', 0));
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => failingAPI;
     const n1 = helper.getNode('n1') as any;

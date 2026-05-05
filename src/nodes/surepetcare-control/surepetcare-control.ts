@@ -1,14 +1,14 @@
 import { NodeAPI, NodeDef } from 'node-red';
-import { LockState, SurepetcareBackend } from '../../types/sureflap';
+import { LockState, SurepetcareBackend } from '../../types/surepetcare';
 
-interface SureflapControlNodeDef extends NodeDef {
+interface SurepetcareControlNodeDef extends NodeDef {
   config: string;
   deviceId: string;
   lockState: LockState;
 }
 
 export = function (RED: NodeAPI) {
-  function SureflapControlNode(this: any, config: SureflapControlNodeDef) {
+  function SurepetcareControlNode(this: any, config: SurepetcareControlNodeDef) {
     RED.nodes.createNode(this, config);
 
     const configNode = RED.nodes.getNode(config.config) as any;
@@ -32,5 +32,5 @@ export = function (RED: NodeAPI) {
     this.status({ fill: 'yellow', shape: 'ring', text: 'idle' });
   }
 
-  RED.nodes.registerType('surepetcare-control', SureflapControlNode);
+  RED.nodes.registerType('surepetcare-control', SurepetcareControlNode);
 };
