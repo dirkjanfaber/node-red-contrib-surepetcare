@@ -26,7 +26,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && copyfiles -u 2 \"src/nodes/**/*.html\" \"src/nodes/**/icons/*.svg\" dist/nodes/",
+    "build": "tsc -p tsconfig.build.json && copyfiles -u 2 \"src/nodes/**/*.html\" \"src/nodes/**/icons/*.svg\" dist/nodes/",
     "build:watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -34,11 +34,19 @@
     "prepack": "npm run build"
   },
   "node-red": {
-    "version": ">=2.0.0",
+    "version": ">=4.0.0",
     "nodes": {
       "surepetcare-config": "dist/nodes/surepetcare-config/surepetcare-config.js",
       "surepetcare-pets": "dist/nodes/surepetcare-pets/surepetcare-pets.js",
       "surepetcare-control": "dist/nodes/surepetcare-control/surepetcare-control.js"
+    }
+  },
+  "peerDependencies": {
+    "node-red": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-red": {
+      "optional": true
     }
   },
   "dependencies": {
