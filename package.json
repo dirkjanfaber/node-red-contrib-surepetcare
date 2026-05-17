@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-surepetcare",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node-RED nodes for SurePetcare/SureFlap Connect smart cat flaps",
   "keywords": [
     "node-red",
