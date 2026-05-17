@@ -1,0 +1,99 @@
+[
+  {
+    "id": "tab-daily-rename",
+    "type": "tab",
+    "label": "Daily Flap Rename",
+    "disabled": false,
+    "info": "Renames your SurePetcare cat flap every day with a randomly chosen dramatic name, so you get messages like 'Minoes left through the Gates of Valhalla'.\n\n## Setup\n1. Configure the surepetcare-config node with your credentials\n2. Set the Device ID in the surepetcare-control node (numeric ID from GET /device)\n3. Deploy and click the inject node's button to test it immediately\n4. The flow fires automatically every day at 00:01\n\n## Notes\n- All names are phrased to read naturally in '$cat left through $name'\n- If you have multiple flaps, adjust the Device ID in the control node to target a specific one"
+  },
+  {
+    "id": "rename-cfg",
+    "type": "surepetcare-config",
+    "name": "SurePetcare"
+  },
+  {
+    "id": "rename-trigger",
+    "type": "inject",
+    "z": "tab-daily-rename",
+    "name": "Daily at 00:01",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "crontab": "1 0 * * *",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 160,
+    "y": 140,
+    "wires": [["rename-pick-name"]]
+  },
+  {
+    "id": "rename-pick-name",
+    "type": "function",
+    "z": "tab-daily-rename",
+    "name": "Pick Today's Name",
+    "func": "const names = [\n    // Mythological & Epic\n    'the Gates of Valhalla',\n    'the Bifrost',\n    'the Portal of Olympus',\n    'the Elysian Gateway',\n    'Styx Crossing',\n    \"the Oracle's Pass\",\n    \"Hades' Threshold\",\n    'the Asgardian Portal',\n    \"Schrödinger's Portal\",\n\n    // Sci-Fi\n    'Wormhole Alpha-7',\n    'the Transporter',\n    'Stargate One',\n    'the Event Horizon',\n    'Hyperspace Junction',\n    'the TARDIS',\n    'the Death Star Exhaust Port',\n    'the Holodeck Exit',\n\n    // Fantasy & Literature\n    'Platform 9¾',\n    'the Wardrobe to Narnia',\n    'the Black Gate of Mordor',\n    'the Mines of Moria',\n    'Rivendell Gateway',\n    \"Bag End's Back Door\",\n    \"the Shire's Secret Exit\",\n\n    // TV & Pop Culture\n    'the Twilight Zone',\n    'the Upside Down',\n    'the Phantom Zone',\n    'the Sunken Place',\n    'the Matrix Exit',\n    'the Westworld Gate',\n    \"Jumanji's Portal\",\n\n    // Dramatic & Theatrical\n    'the Grand Theatre of Departure',\n    'the Eternal Threshold',\n    'the Portal of Destiny',\n    'the Gateway to the Great Beyond',\n    'the Threshold of Eternity',\n    'the Majestic Passage',\n\n    // Silly & Punny\n    'the Paw-tal',\n    'the Meow-trix',\n    'the Feline Gateway',\n    'Whisker Warp',\n    'the Purr-tal Dimension',\n    'the Claws & Effect Portal',\n    'the Fur-bidden Zone',\n    'the Cat-acomb Entrance',\n    'the Hiss-toric Gateway',\n    'Nine Lives Threshold',\n    'the Pounce Point',\n\n    // Historical\n    'the Thermopylae Pass',\n    \"Hadrian's Cat Door\",\n    'the Agincourt Gate',\n    \"Brandenburg's Cat Portal\",\n\n    // Cosmic\n    'the Black Hole',\n    'the Nebula Gate',\n    'Andromeda Crossing',\n    'the Cosmic Radiation Zone'\n];\n\nmsg.payload = { name: names[Math.floor(Math.random() * names.length)] };\nreturn msg;",
+    "outputs": 1,
+    "x": 380,
+    "y": 140,
+    "wires": [["rename-control"]]
+  },
+  {
+    "id": "rename-control",
+    "type": "surepetcare-control",
+    "z": "tab-daily-rename",
+    "name": "Rename Flap",
+    "config": "rename-cfg",
+    "deviceId": "",
+    "lockState": 0,
+    "x": 600,
+    "y": 140,
+    "wires": [["rename-debug"]]
+  },
+  {
+    "id": "rename-debug",
+    "type": "debug",
+    "z": "tab-daily-rename",
+    "name": "Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 800,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "rename-catch",
+    "type": "catch",
+    "z": "tab-daily-rename",
+    "name": "Catch Errors",
+    "scope": null,
+    "uncaught": false,
+    "x": 160,
+    "y": 260,
+    "wires": [["rename-error-debug"]]
+  },
+  {
+    "id": "rename-error-debug",
+    "type": "debug",
+    "z": "tab-daily-rename",
+    "name": "Error",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "error",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 380,
+    "y": 260,
+    "wires": []
+  }
+]

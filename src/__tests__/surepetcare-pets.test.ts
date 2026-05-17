@@ -35,6 +35,7 @@ const mockAPI: SurepetcareBackend = {
     { id: 2, name: 'Shadow', position: { where: 2 } },
   ]),
   setLockState: jest.fn().mockResolvedValue(undefined),
+  renameDevice: jest.fn().mockResolvedValue(undefined),
   getDevices: jest.fn().mockResolvedValue([]),
 };
 

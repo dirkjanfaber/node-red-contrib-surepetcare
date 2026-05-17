@@ -11,6 +11,7 @@ const mockAPI: SurepetcareBackend = {
   authenticate: jest.fn().mockResolvedValue(undefined),
   getPets: jest.fn().mockResolvedValue([]),
   setLockState: jest.fn().mockResolvedValue(undefined),
+  renameDevice: jest.fn().mockResolvedValue(undefined),
   getDevices: jest.fn().mockResolvedValue([
     { id: 10, name: 'Front Door', serial_number: 'H008-0001', product_id: 6, household_id: 1 },
   ]),
@@ -108,6 +109,34 @@ describe('surepetcare-control node', () => {
 
     const lastArg = (n1.status as any).lastCall?.args[0];
     expect(lastArg).toMatchObject({ fill: 'green' });
+  });
+
+  it('should call renameDevice when msg.payload.name is set', async () => {
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => mockAPI;
+    const n2 = helper.getNode('n2');
+
+    const msgReceived = new Promise<any>(resolve => n2.on('input', resolve));
+    helper.getNode('n1').receive({ payload: { name: 'the Gates of Valhalla' } });
+    const msg = await msgReceived;
+
+    expect(mockAPI.renameDevice).toHaveBeenCalledWith('10', 'the Gates of Valhalla');
+    expect(mockAPI.setLockState).not.toHaveBeenCalled();
+    expect(msg.payload).toMatchObject({ deviceId: '10', name: 'the Gates of Valhalla' });
+  });
+
+  it('should use msg.payload.deviceId override when renaming', async () => {
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => mockAPI;
+    const n2 = helper.getNode('n2');
+
+    const msgReceived = new Promise<void>(resolve => n2.on('input', () => resolve()));
+    helper.getNode('n1').receive({ payload: { deviceId: '42', name: 'the Bifrost' } });
+    await msgReceived;
+
+    expect(mockAPI.renameDevice).toHaveBeenCalledWith('42', 'the Bifrost');
   });
 
   it('should set status red and call node.error on failure', async () => {

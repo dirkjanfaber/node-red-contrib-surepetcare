@@ -16,12 +16,19 @@ export = function (RED: NodeAPI) {
     this.on('input', async (msg: any) => {
       const api: SurepetcareBackend = configNode.getAPI();
       const deviceId: string = msg.payload?.deviceId ?? config.deviceId;
-      const lockState: LockState = msg.payload?.lockState ?? config.lockState;
 
       try {
-        await api.setLockState(deviceId, lockState);
-        this.status({ fill: 'green', shape: 'dot', text: `lock: ${lockState}` });
-        msg.payload = { deviceId, lockState };
+        if (msg.payload?.name !== undefined) {
+          const name: string = msg.payload.name;
+          await api.renameDevice(deviceId, name);
+          this.status({ fill: 'green', shape: 'dot', text: `renamed: ${name}` });
+          msg.payload = { deviceId, name };
+        } else {
+          const lockState: LockState = msg.payload?.lockState ?? config.lockState;
+          await api.setLockState(deviceId, lockState);
+          this.status({ fill: 'green', shape: 'dot', text: `lock: ${lockState}` });
+          msg.payload = { deviceId, lockState };
+        }
         this.send(msg);
       } catch (err: any) {
         this.status({ fill: 'red', shape: 'ring', text: err.message });

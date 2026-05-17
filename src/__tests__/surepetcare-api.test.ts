@@ -175,6 +175,50 @@ describe('SurepetcareAPI', () => {
     });
   });
 
+  // --- renameDevice ---
+
+  describe('renameDevice()', () => {
+    beforeEach(async () => {
+      mock.onPost(`${BASE_URL}/auth/login`).reply(200, { data: { token: MOCK_TOKEN } });
+      await api.authenticate();
+    });
+
+    it('sends PUT with the correct name', async () => {
+      mock.onPut(`${BASE_URL}/device/10`).reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Gates of Valhalla');
+
+      const body = JSON.parse(mock.history.put[0].data);
+      expect(body.name).toBe('the Gates of Valhalla');
+    });
+
+    it('sends Bearer token in the Authorization header', async () => {
+      mock.onPut(`${BASE_URL}/device/10`).reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Twilight Zone');
+
+      expect(mock.history.put[0].headers?.Authorization).toBe(`Bearer ${MOCK_TOKEN}`);
+    });
+
+    it('re-authenticates and retries on 401', async () => {
+      mock
+        .onPut(`${BASE_URL}/device/10`)
+        .replyOnce(401)
+        .onPut(`${BASE_URL}/device/10`)
+        .reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Bifrost');
+
+      expect(mock.history.post).toHaveLength(2);
+    });
+
+    it('throws on network error', async () => {
+      mock.onPut(`${BASE_URL}/device/10`).networkError();
+
+      await expect(api.renameDevice('10', 'the Bifrost')).rejects.toThrow();
+    });
+  });
+
   // --- setLockState ---
 
   describe('setLockState()', () => {

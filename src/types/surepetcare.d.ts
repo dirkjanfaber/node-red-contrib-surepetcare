@@ -27,5 +27,6 @@ export interface SurepetcareBackend {
   authenticate(): Promise<void>;
   getPets(): Promise<Pet[]>;
   setLockState(deviceId: string, state: LockState): Promise<void>;
+  renameDevice(deviceId: string, name: string): Promise<void>;
   getDevices(): Promise<Device[]>;
 }

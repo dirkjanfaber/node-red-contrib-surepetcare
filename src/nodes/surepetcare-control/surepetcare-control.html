@@ -15,6 +15,60 @@
       return this.name || 'surepetcare control';
     },
     paletteLabel: 'surepetcare control',
+    oneditprepare: function () {
+      const node = this;
+
+      // Pre-populate select with the stored device ID so it isn't lost before discovery
+      if (node.deviceId) {
+        $('#node-input-deviceId')
+          .empty()
+          .append($('<option>', { value: node.deviceId, text: 'Device ' + node.deviceId }))
+          .val(node.deviceId);
+      }
+
+      $('#node-btn-discover').on('click', function () {
+        const configId = $('#node-input-config').val();
+        if (!configId) {
+          RED.notify('Select and deploy a config node first.', { type: 'warning' });
+          return;
+        }
+        const btn = $(this).prop('disabled', true);
+        btn.find('i').attr('class', 'fa fa-spinner fa-spin');
+
+        const productNames = {
+          1: 'Hub', 3: 'Pet Door Connect', 6: 'Cat Flap Connect',
+          8: 'Feeder Connect', 13: 'Felaqua', 58: 'Dual Scan Cat Flap'
+        };
+
+        $.getJSON('/surepetcare/devices?id=' + configId)
+          .done(function (devices) {
+            const select = $('#node-input-deviceId');
+            const current = select.val() || node.deviceId;
+            select.empty();
+            if (!devices.length) {
+              select.append($('<option>', { value: '', text: '— no devices found —' }));
+            }
+            devices.forEach(function (d) {
+              const product = productNames[d.product_id] || 'Device';
+              select.append($('<option>', {
+                value: String(d.id),
+                text: d.name + ' (' + product + ', ' + d.serial_number + ')'
+              }));
+            });
+            select.val(current);
+            if (!select.val() && devices.length) {
+              select.val(String(devices[0].id));
+            }
+          })
+          .fail(function (xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Request failed';
+            RED.notify('Discover failed: ' + msg, { type: 'error' });
+          })
+          .always(function () {
+            btn.prop('disabled', false).find('i').attr('class', 'fa fa-search');
+          });
+      });
+    },
   });
 </script>
 
@@ -28,8 +82,13 @@
     <input type="text" id="node-input-config" />
   </div>
   <div class="form-row">
-    <label for="node-input-deviceId"><i class="fa fa-microchip"></i> Device ID</label>
-    <input type="text" id="node-input-deviceId" placeholder="Numeric device ID from GET /device" />
+    <label for="node-input-deviceId"><i class="fa fa-microchip"></i> Device</label>
+    <select id="node-input-deviceId" style="width:45%">
+      <option value="">— click Discover —</option>
+    </select>
+    <button type="button" id="node-btn-discover" class="red-ui-button" style="margin-left:6px">
+      <i class="fa fa-search"></i> Discover
+    </button>
   </div>
   <div class="form-row">
     <label for="node-input-lockState"><i class="fa fa-lock"></i> Lock state</label>
@@ -43,9 +102,12 @@
 </script>
 
 <script type="text/html" data-help-name="surepetcare-control">
-  <p>Sets the lock state of a SureFlap cat flap.</p>
+  <p>Controls a SureFlap cat flap: sets the lock state or renames the device.</p>
+  <p>If <code>msg.payload.name</code> is set the device is renamed. Otherwise the lock state is applied.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
+    <dt class="optional">payload.name <span class="property-type">string</span></dt>
+    <dd>New display name for the device. When present, triggers a rename instead of a lock-state change.</dd>
     <dt class="optional">payload.lockState <span class="property-type">number</span></dt>
     <dd>Override the configured lock state: 0 unlocked, 1 locked-in, 2 locked-out, 3 locked</dd>
     <dt class="optional">payload.deviceId <span class="property-type">string</span></dt>
@@ -55,7 +117,9 @@
   <dl class="message-properties">
     <dt>payload.deviceId <span class="property-type">string</span></dt>
     <dd>Device ID that was targeted</dd>
-    <dt>payload.lockState <span class="property-type">number</span></dt>
-    <dd>Lock state that was applied</dd>
+    <dt class="optional">payload.name <span class="property-type">string</span></dt>
+    <dd>New name that was applied (rename operations only)</dd>
+    <dt class="optional">payload.lockState <span class="property-type">number</span></dt>
+    <dd>Lock state that was applied (lock operations only)</dd>
   </dl>
 </script>

@@ -69,6 +69,15 @@ export class SurepetcareAPI implements SurepetcareBackend {
     });
   }
 
+  async renameDevice(deviceId: string, name: string): Promise<void> {
+    await this.authenticate();
+    return this.withRetry(async () => {
+      await this.http.put(`/device/${deviceId}`, { name }, {
+        headers: this.authHeaders(),
+      });
+    });
+  }
+
   async setLockState(deviceId: string, state: LockState): Promise<void> {
     await this.authenticate();
     return this.withRetry(async () => {
