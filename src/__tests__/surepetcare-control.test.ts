@@ -111,6 +111,47 @@ describe('surepetcare-control node', () => {
     expect(lastArg).toMatchObject({ fill: 'green' });
   });
 
+  it('should include a human-readable label alongside the lock state number in status', async () => {
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 3));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => mockAPI;
+    const n1 = helper.getNode('n1') as any;
+    const n2 = helper.getNode('n2');
+
+    const msgReceived = new Promise<void>(resolve => n2.on('input', () => resolve()));
+    n1.receive({ payload: {} });
+    await msgReceived;
+
+    const lastArg = (n1.status as any).lastCall?.args[0];
+    expect(lastArg.text).toBe('lock: 3 (locked both ways)');
+  });
+
+  it('should label each lock state correctly in status text', async () => {
+    const cases: Array<[number, string]> = [
+      [0, 'unlocked'],
+      [1, 'locked in'],
+      [2, 'locked out'],
+      [3, 'locked both ways'],
+    ];
+
+    for (const [lockState, label] of cases) {
+      await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', lockState));
+      const cfg = helper.getNode('cfg1') as any;
+      cfg.getAPI = () => mockAPI;
+      const n1 = helper.getNode('n1') as any;
+      const n2 = helper.getNode('n2');
+
+      const msgReceived = new Promise<void>(resolve => n2.on('input', () => resolve()));
+      n1.receive({ payload: {} });
+      await msgReceived;
+
+      const lastArg = (n1.status as any).lastCall?.args[0];
+      expect(lastArg.text).toBe(`lock: ${lockState} (${label})`);
+
+      await helper.unload();
+    }
+  });
+
   it('should call renameDevice when msg.payload.name is set', async () => {
     await helper.load([surepetcareConfig, surepetcareControl], makeFlow('10', 0));
     const cfg = helper.getNode('cfg1') as any;

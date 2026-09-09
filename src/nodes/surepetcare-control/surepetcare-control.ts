@@ -1,6 +1,13 @@
 import { NodeAPI, NodeDef } from 'node-red';
 import { LockState, SurepetcareBackend } from '../../types/surepetcare';
 
+const LOCK_STATE_LABELS: Record<LockState, string> = {
+  0: 'unlocked',
+  1: 'locked in',
+  2: 'locked out',
+  3: 'locked both ways',
+};
+
 interface SurepetcareControlNodeDef extends NodeDef {
   config: string;
   deviceId: string;
@@ -26,7 +33,8 @@ export = function (RED: NodeAPI) {
         } else {
           const lockState: LockState = msg.payload?.lockState ?? config.lockState;
           await api.setLockState(deviceId, lockState);
-          this.status({ fill: 'green', shape: 'dot', text: `lock: ${lockState}` });
+          const label = LOCK_STATE_LABELS[Number(lockState) as LockState] ?? 'unknown';
+          this.status({ fill: 'green', shape: 'dot', text: `lock: ${lockState} (${label})` });
           msg.payload = { deviceId, lockState };
         }
         this.send(msg);
