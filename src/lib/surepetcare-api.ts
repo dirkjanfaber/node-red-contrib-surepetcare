@@ -3,16 +3,26 @@ import { Device, LockState, Pet, SurepetcareBackend, SurepetcareCredentials } fr
 
 const BASE_URL = 'https://app.api.surehub.io/api';
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+// Backoff schedule applied to 429s and network errors, shared by every
+// call (locking and unlocking included) so neither direction is a single
+// point of failure.
+const DEFAULT_RETRY_DELAYS_MS = [1000, 3000, 9000];
+
+export interface SurepetcareAPIOptions {
+  retryDelays?: number[];
+}
 
 export class SurepetcareAPI implements SurepetcareBackend {
   private credentials: SurepetcareCredentials;
   private token: string | null = null;
   private tokenExpiresAt: number = 0;
   private http: AxiosInstance;
+  private retryDelays: number[];
 
-  constructor(credentials: SurepetcareCredentials) {
+  constructor(credentials: SurepetcareCredentials, options: SurepetcareAPIOptions = {}) {
     this.credentials = credentials;
     this.http = axios.create({ baseURL: BASE_URL });
+    this.retryDelays = options.retryDelays ?? DEFAULT_RETRY_DELAYS_MS;
   }
 
   async authenticate(): Promise<void> {
@@ -32,19 +42,44 @@ export class SurepetcareAPI implements SurepetcareBackend {
     return { Authorization: `Bearer ${this.token}` };
   }
 
+  private sleep(ms: number): Promise<void> {
+    if (ms <= 0) {
+      return Promise.resolve();
+    }
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try {
-      return await fn();
-    } catch (err: any) {
-      if (err?.response?.status === 401) {
-        this.token = null;
-        await this.authenticate();
+    let reauthenticated = false;
+    let attempt = 0;
+
+    for (;;) {
+      try {
         return await fn();
+      } catch (err: any) {
+        const status = err?.response?.status;
+
+        if (status === 401 && !reauthenticated) {
+          reauthenticated = true;
+          this.token = null;
+          await this.authenticate();
+          continue;
+        }
+
+        const isRateLimited = status === 429;
+        const isNetworkError = !err?.response;
+
+        if ((isRateLimited || isNetworkError) && attempt < this.retryDelays.length) {
+          await this.sleep(this.retryDelays[attempt]);
+          attempt++;
+          continue;
+        }
+
+        if (isRateLimited) {
+          throw new Error('Rate limit exceeded - back off before retrying');
+        }
+        throw err;
       }
-      if (err?.response?.status === 429) {
-        throw new Error('Rate limit exceeded - back off before retrying');
-      }
-      throw err;
     }
   }
 
@@ -63,6 +98,7 @@ export class SurepetcareAPI implements SurepetcareBackend {
     await this.authenticate();
     return this.withRetry(async () => {
       const response = await this.http.get('/device', {
+        params: { 'with[]': 'control' },
         headers: this.authHeaders(),
       });
       return response.data.data as Device[];

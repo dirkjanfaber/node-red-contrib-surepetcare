@@ -41,7 +41,8 @@
     "nodes": {
       "surepetcare-config": "dist/nodes/surepetcare-config/surepetcare-config.js",
       "surepetcare-pets": "dist/nodes/surepetcare-pets/surepetcare-pets.js",
-      "surepetcare-control": "dist/nodes/surepetcare-control/surepetcare-control.js"
+      "surepetcare-control": "dist/nodes/surepetcare-control/surepetcare-control.js",
+      "surepetcare-devices": "dist/nodes/surepetcare-devices/surepetcare-devices.js"
     }
   },
   "peerDependencies": {

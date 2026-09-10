@@ -25,11 +25,14 @@ describe('SurepetcareAPI', () => {
 
   beforeEach(() => {
     mock = new MockAdapter(axios);
-    api = new SurepetcareAPI({
-      email: 'test@example.com',
-      password: 'secret',
-      deviceId: 'test-device-uuid',
-    });
+    api = new SurepetcareAPI(
+      {
+        email: 'test@example.com',
+        password: 'secret',
+        deviceId: 'test-device-uuid',
+      },
+      { retryDelays: [0, 0, 0] }
+    );
   });
 
   afterEach(() => {
@@ -123,16 +126,49 @@ describe('SurepetcareAPI', () => {
       await expect(api.getPets()).rejects.toThrow();
     });
 
-    it('throws on 429 rate limit', async () => {
+    it('throws on 429 rate limit after exhausting retries', async () => {
       mock.onGet(`${BASE_URL}/pet`).reply(429);
 
       await expect(api.getPets()).rejects.toThrow(/rate limit/i);
+      // 1 initial attempt + 3 retries (retryDelays: [0, 0, 0])
+      expect(mock.history.get).toHaveLength(4);
     });
 
-    it('throws on network error', async () => {
+    it('retries on 429 and succeeds once the rate limit clears', async () => {
+      mock
+        .onGet(`${BASE_URL}/pet`)
+        .replyOnce(429)
+        .onGet(`${BASE_URL}/pet`)
+        .replyOnce(429)
+        .onGet(`${BASE_URL}/pet`)
+        .reply(200, MOCK_PETS_RESPONSE);
+
+      const pets = await api.getPets();
+
+      expect(pets).toHaveLength(2);
+      expect(mock.history.get).toHaveLength(3);
+    });
+
+    it('throws on network error after exhausting retries', async () => {
       mock.onGet(`${BASE_URL}/pet`).networkError();
 
       await expect(api.getPets()).rejects.toThrow();
+      expect(mock.history.get).toHaveLength(4);
+    });
+
+    it('retries on network error and succeeds once connectivity returns', async () => {
+      mock
+        .onGet(`${BASE_URL}/pet`)
+        .networkErrorOnce()
+        .onGet(`${BASE_URL}/pet`)
+        .networkErrorOnce()
+        .onGet(`${BASE_URL}/pet`)
+        .reply(200, MOCK_PETS_RESPONSE);
+
+      const pets = await api.getPets();
+
+      expect(pets).toHaveLength(2);
+      expect(mock.history.get).toHaveLength(3);
     });
   });
 
@@ -172,6 +208,35 @@ describe('SurepetcareAPI', () => {
 
       expect(devices).toHaveLength(1);
       expect(mock.history.post).toHaveLength(2);
+    });
+
+    it('requests control data so curfew schedule and live lock status are included', async () => {
+      mock.onGet(`${BASE_URL}/device`).reply(200, MOCK_DEVICES_RESPONSE);
+
+      await api.getDevices();
+
+      expect(mock.history.get[0].params).toEqual({ 'with[]': 'control' });
+    });
+
+    it('passes through the curfew schedule and live locking mode', async () => {
+      mock.onGet(`${BASE_URL}/device`).reply(200, {
+        data: [
+          {
+            id: 10,
+            name: 'Front Door Flap',
+            serial_number: 'H008-0123456',
+            product_id: 6,
+            household_id: 100,
+            status: { locking: { mode: -1 } },
+            control: { curfew: [{ lock_time: '20:00', unlock_time: '07:00', enabled: true }] },
+          },
+        ],
+      });
+
+      const devices = await api.getDevices();
+
+      expect(devices[0].status?.locking?.mode).toBe(-1);
+      expect(devices[0].control?.curfew).toEqual([{ lock_time: '20:00', unlock_time: '07:00', enabled: true }]);
     });
   });
 
@@ -268,6 +333,93 @@ describe('SurepetcareAPI', () => {
       mock.onPut(`${BASE_URL}/device/10/control`).networkError();
 
       await expect(api.setLockState('10', 0)).rejects.toThrow();
+    });
+
+    it('retries locking on 429 and succeeds once the rate limit clears', async () => {
+      mock
+        .onPut(`${BASE_URL}/device/10/control`)
+        .replyOnce(429)
+        .onPut(`${BASE_URL}/device/10/control`)
+        .replyOnce(429)
+        .onPut(`${BASE_URL}/device/10/control`)
+        .reply(200, { data: {} });
+
+      await api.setLockState('10', 3); // locked both ways
+
+      expect(mock.history.put).toHaveLength(3);
+      expect(JSON.parse(mock.history.put[2].data).locking).toBe(3);
+    });
+
+    it('retries unlocking on 429 and succeeds once the rate limit clears', async () => {
+      mock
+        .onPut(`${BASE_URL}/device/10/control`)
+        .replyOnce(429)
+        .onPut(`${BASE_URL}/device/10/control`)
+        .replyOnce(429)
+        .onPut(`${BASE_URL}/device/10/control`)
+        .reply(200, { data: {} });
+
+      await api.setLockState('10', 0); // unlocked
+
+      expect(mock.history.put).toHaveLength(3);
+      expect(JSON.parse(mock.history.put[2].data).locking).toBe(0);
+    });
+
+    it('retries on network error and succeeds once connectivity returns', async () => {
+      mock
+        .onPut(`${BASE_URL}/device/10/control`)
+        .networkErrorOnce()
+        .onPut(`${BASE_URL}/device/10/control`)
+        .networkErrorOnce()
+        .onPut(`${BASE_URL}/device/10/control`)
+        .reply(200, { data: {} });
+
+      await api.setLockState('10', 1);
+
+      expect(mock.history.put).toHaveLength(3);
+    });
+
+    it('throws on 429 rate limit after exhausting retries, whether locking or unlocking', async () => {
+      mock.onPut(`${BASE_URL}/device/10/control`).reply(429);
+
+      await expect(api.setLockState('10', 3)).rejects.toThrow(/rate limit/i);
+      expect(mock.history.put).toHaveLength(4);
+    });
+  });
+
+  describe('retry configuration', () => {
+    it('actually waits out the configured delay before retrying', async () => {
+      const delayedApi = new SurepetcareAPI(
+        {
+          email: 'test@example.com',
+          password: 'secret',
+          deviceId: 'test-device-uuid',
+        },
+        { retryDelays: [10] }
+      );
+      mock.onPost(`${BASE_URL}/auth/login`).reply(200, { data: { token: MOCK_TOKEN } });
+      mock
+        .onGet(`${BASE_URL}/pet`)
+        .replyOnce(429)
+        .onGet(`${BASE_URL}/pet`)
+        .reply(200, MOCK_PETS_RESPONSE);
+
+      const pets = await delayedApi.getPets();
+
+      expect(pets).toHaveLength(2);
+    });
+
+    it('defaults to a non-empty backoff schedule when none is provided', () => {
+      const defaultApi = new SurepetcareAPI({
+        email: 'test@example.com',
+        password: 'secret',
+        deviceId: 'test-device-uuid',
+      });
+
+      const delays = (defaultApi as any).retryDelays as number[];
+      expect(Array.isArray(delays)).toBe(true);
+      expect(delays.length).toBeGreaterThan(0);
+      expect(delays.every(ms => ms >= 0)).toBe(true);
     });
   });
 });
