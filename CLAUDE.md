@@ -17,6 +17,7 @@ A Node-RED node package for interacting with the SurePetcare/SureFlap Connect se
 1. **`sureflap-config`** — config node, handles credentials + token lifecycle
 2. **`sureflap-pets`** — polls pet locations, emits messages per cat
 3. **`sureflap-control`** — sets flap lock state (open/locked-in/locked-out/locked)
+4. **`surepetcare-devices`** — polls device lock state and curfew schedule, emits messages per device (built under the post-rename `surepetcare-` prefix — see Notes)
 
 ### Directory structure
 
@@ -82,11 +83,20 @@ Response: `{ data: [ { id, name, position: { where: 1|2 } } ] }`
 ### Devices
 
 ```
-GET /device
+GET /device?with[]=control
 Authorization: Bearer {token}
 ```
 
-Used once on startup to discover device IDs needed for control calls.
+Used on startup to discover device IDs needed for control calls, and on every poll by
+`surepetcare-devices` for live lock state and curfew schedule.
+
+Response: `{ data: [ { id, name, serial_number, product_id, household_id, status, control } ] }`
+
+- `status.locking.mode` — the device's *live* lock state, a superset of the settable
+  `locking` values below: `0`-`3` as in Lock control, plus `4` (locking deferred to the
+  curfew schedule), `-1` (curfew currently engaged — exit blocked, entry still allowed),
+  `-2` (curfew currently released), `-3` (curfew status unknown)
+- `control.curfew` — the schedule configured in the app: `[{ lock_time, unlock_time, enabled }]`
 
 ### Lock control
 
@@ -110,8 +120,13 @@ Lock state values:
 ### Error handling
 
 - 401: re-authenticate and retry once
-- 429: back off, respect rate limits — do not poll faster than every 60s
-- Network errors: emit Node-RED status error, do not crash
+- 429 / network errors: `withRetry` in `surepetcare-api.ts` retries with exponential
+  backoff (default schedule `[1000, 3000, 9000]` ms, configurable via the constructor's
+  `retryDelays` option) before giving up — applies to every call (locking, unlocking,
+  polling), not just reads. Still respect the rate limit at the call site: do not poll
+  faster than every 60s.
+- Network errors that exhaust retries, and any other unrecoverable error: emit Node-RED
+  status error via `node.error()`, do not crash
 
 ## Node-RED conventions to follow
 
@@ -257,6 +272,8 @@ it('should emit inside/outside per cat on poll', async () => {
 
 - `device_id` in the auth payload should be a stable UUID per installation — generate on first run and persist in the config node's credentials
 - The API has no official webhook/push support — polling is the only option for the cloud backend
+- The package and its nodes were renamed from `sureflap-*` to `surepetcare-*` after this doc's node/directory-structure examples were written; those examples still show the old prefix and haven't been swept. Actual source lives under `src/nodes/surepetcare-*` — trust the code over the sample trees above.
+- `examples/curfew-full-lock.json` upgrades the app's own curfew from a one-way lock to a full both-ways lock, but only once `surepetcare-pets` confirms every chip is inside — see that flow's own info panel for the reasoning
 - PetHubLocal uses MQTT topics like `pethub/ha/{serial}/KeepIn` (ON/OFF) and `pethub/{serial}/status` for pet presence — keep this in mind when designing the internal event model so switching backends later is a small diff
 
 <!-- source: 40-ai-rules.md -->
