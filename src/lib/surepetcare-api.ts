@@ -107,11 +107,28 @@ export class SurepetcareAPI implements SurepetcareBackend {
 
   async renameDevice(deviceId: string, name: string): Promise<void> {
     await this.authenticate();
-    return this.withRetry(async () => {
+
+    // PUT /device/{id} (unlike /device/{id}/control) has been observed to
+    // reset the device's lock override to unlocked as a side effect of the
+    // rename, even though locking isn't part of this request body. Capture
+    // whatever explicit override (0-3) was active beforehand and re-assert
+    // it once the rename completes, so a curfew-driven lock - e.g. the
+    // escalation in examples/curfew-full-lock.json - doesn't silently get
+    // dropped by an unrelated rename. Modes outside 0-3 mean the flap is
+    // governed by the app's own curfew schedule rather than an explicit
+    // override, so there's nothing to re-assert.
+    const [device] = await this.getDevices().then(devices => devices.filter(d => String(d.id) === deviceId));
+    const priorLockState = device?.status?.locking?.mode;
+
+    await this.withRetry(async () => {
       await this.http.put(`/device/${deviceId}`, { name }, {
         headers: this.authHeaders(),
       });
     });
+
+    if (priorLockState !== undefined && priorLockState >= 0 && priorLockState <= 3) {
+      await this.setLockState(deviceId, priorLockState as LockState);
+    }
   }
 
   async setLockState(deviceId: string, state: LockState): Promise<void> {

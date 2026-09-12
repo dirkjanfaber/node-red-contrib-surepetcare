@@ -245,6 +245,7 @@ describe('SurepetcareAPI', () => {
   describe('renameDevice()', () => {
     beforeEach(async () => {
       mock.onPost(`${BASE_URL}/auth/login`).reply(200, { data: { token: MOCK_TOKEN } });
+      mock.onGet(`${BASE_URL}/device`).reply(200, MOCK_DEVICES_RESPONSE);
       await api.authenticate();
     });
 
@@ -281,6 +282,41 @@ describe('SurepetcareAPI', () => {
       mock.onPut(`${BASE_URL}/device/10`).networkError();
 
       await expect(api.renameDevice('10', 'the Bifrost')).rejects.toThrow();
+    });
+
+    it('re-asserts an explicit lock override after renaming, so the rename endpoint cannot silently drop it', async () => {
+      mock.onGet(`${BASE_URL}/device`).reply(200, {
+        data: [{ ...MOCK_DEVICES_RESPONSE.data[0], status: { locking: { mode: 3 } } }],
+      });
+      mock.onPut(`${BASE_URL}/device/10`).reply(200, { data: {} });
+      mock.onPut(`${BASE_URL}/device/10/control`).reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Gates of Valhalla');
+
+      expect(mock.history.put).toHaveLength(2);
+      expect(mock.history.put[0].url).toBe('/device/10');
+      expect(JSON.parse(mock.history.put[0].data).name).toBe('the Gates of Valhalla');
+      expect(mock.history.put[1].url).toBe('/device/10/control');
+      expect(JSON.parse(mock.history.put[1].data).locking).toBe(3);
+    });
+
+    it('does not re-assert a lock state when the device has no prior status', async () => {
+      mock.onPut(`${BASE_URL}/device/10`).reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Bifrost');
+
+      expect(mock.history.put).toHaveLength(1);
+    });
+
+    it('does not re-assert a lock state when the flap is governed by the app\'s own curfew schedule', async () => {
+      mock.onGet(`${BASE_URL}/device`).reply(200, {
+        data: [{ ...MOCK_DEVICES_RESPONSE.data[0], status: { locking: { mode: -1 } } }],
+      });
+      mock.onPut(`${BASE_URL}/device/10`).reply(200, { data: {} });
+
+      await api.renameDevice('10', 'the Bifrost');
+
+      expect(mock.history.put).toHaveLength(1);
     });
   });
 
