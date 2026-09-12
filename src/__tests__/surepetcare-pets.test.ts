@@ -37,6 +37,7 @@ const mockAPI: SurepetcareBackend = {
   setLockState: jest.fn().mockResolvedValue(undefined),
   renameDevice: jest.fn().mockResolvedValue(undefined),
   getDevices: jest.fn().mockResolvedValue([]),
+  getPetReport: jest.fn().mockResolvedValue({}),
 };
 
 describe('surepetcare-pets node', () => {

@@ -53,6 +53,7 @@ const mockAPI: SurepetcareBackend = {
       control: { curfew: [] },
     },
   ]),
+  getPetReport: jest.fn().mockResolvedValue({}),
 };
 
 describe('surepetcare-devices node', () => {

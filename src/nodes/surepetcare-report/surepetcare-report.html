@@ -1,0 +1,112 @@
+<script type="text/javascript">
+  RED.nodes.registerType('surepetcare-report', {
+    category: 'SureFlap',
+    color: '#667f91',
+    defaults: {
+      name: { value: '' },
+      config: { value: '', type: 'surepetcare-config', required: true },
+      petId: { value: '' },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'paw.svg',
+    label: function () {
+      return this.name || 'surepetcare report';
+    },
+    paletteLabel: 'surepetcare report',
+    oneditprepare: function () {
+      const node = this;
+
+      // Pre-populate select with the stored pet ID so it isn't lost before discovery
+      if (node.petId) {
+        $('#node-input-petId')
+          .empty()
+          .append($('<option>', { value: node.petId, text: 'Pet ' + node.petId }))
+          .val(node.petId);
+      }
+
+      $('#node-btn-discover').on('click', function () {
+        const configId = $('#node-input-config').val();
+        if (!configId) {
+          RED.notify('Select and deploy a config node first.', { type: 'warning' });
+          return;
+        }
+        const btn = $(this).prop('disabled', true);
+        btn.find('i').attr('class', 'fa fa-spinner fa-spin');
+
+        $.getJSON('/surepetcare/pets?id=' + configId)
+          .done(function (pets) {
+            const select = $('#node-input-petId');
+            const current = select.val() || node.petId;
+            select.empty();
+            if (!pets.length) {
+              select.append($('<option>', { value: '', text: '— no pets found —' }));
+            }
+            pets.forEach(function (p) {
+              select.append($('<option>', { value: String(p.id), text: p.name }));
+            });
+            select.val(current);
+            if (!select.val() && pets.length) {
+              select.val(String(pets[0].id));
+            }
+          })
+          .fail(function (xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Request failed';
+            RED.notify('Discover failed: ' + msg, { type: 'error' });
+          })
+          .always(function () {
+            btn.prop('disabled', false).find('i').attr('class', 'fa fa-search');
+          });
+      });
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="surepetcare-report">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-config"><i class="fa fa-cog"></i> Config</label>
+    <input type="text" id="node-input-config" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-petId"><i class="fa fa-paw"></i> Pet</label>
+    <select id="node-input-petId" style="width:45%">
+      <option value="">— click Discover —</option>
+    </select>
+    <button type="button" id="node-btn-discover" class="red-ui-button" style="margin-left:6px">
+      <i class="fa fa-search"></i> Discover
+    </button>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="surepetcare-report">
+  <p>Fetches aggregated inside/outside activity stats for a pet over a date range - the
+  same data behind the app's activity view.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt class="optional">payload.petId <span class="property-type">string</span></dt>
+    <dd>Override the configured pet ID</dd>
+    <dt class="optional">payload.fromDate <span class="property-type">string</span></dt>
+    <dd>Start date, <code>YYYY-MM-DD</code>. Must be given together with <code>toDate</code>.</dd>
+    <dt class="optional">payload.toDate <span class="property-type">string</span></dt>
+    <dd>End date, <code>YYYY-MM-DD</code>. Must be given together with <code>fromDate</code>.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload.petId <span class="property-type">string</span></dt>
+    <dd>Pet ID that was queried</dd>
+    <dt>payload.report <span class="property-type">object</span></dt>
+    <dd>Raw report data: <code>{ movement, feeding, drinking }</code>, each a list of
+    dated events. Movement entries have <code>from</code>/<code>to</code> timestamps and
+    a <code>duration</code> in seconds spent outside.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>Omitting <code>fromDate</code>/<code>toDate</code> uses the API's default range.
+  The underlying report endpoint can return a very large response when unbounded, so
+  prefer passing an explicit range for anything beyond a quick check.</p>
+  <p>This is an on-demand lookup, not a poller - send an input message each time you
+  want a fresh report.</p>
+</script>

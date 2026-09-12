@@ -1,6 +1,6 @@
 # node-red-contrib-surepetcare
 
-Node-RED nodes for the [SurePetcare](https://www.surepetcare.com) cloud API. Monitor pet locations and control SureFlap cat flap lock states from your Node-RED flows.
+Node-RED nodes for the [SurePetcare](https://www.surepetcare.com) cloud API. Monitor pet locations, control SureFlap cat flap lock states, and query pet activity stats from your Node-RED flows.
 
 > **Disclaimer:** This project is not affiliated with, endorsed by, or in any way associated with Sure Petcare Ltd. It is an independent, community-developed integration created by happy users of their hardware and software. SurePetcare, SureFlap, and SureFeed are trademarks of Sure Petcare Ltd. Use of this package is at your own risk. The underlying API is unofficial and reverse-engineered by the community - it may change or break without notice.
 
@@ -58,6 +58,22 @@ flap is actually doing right now:
 Send any message to the input to trigger an immediate poll. Set **Poll interval** to 0
 to disable automatic polling.
 
+### `surepetcare-report`
+On-demand lookup of aggregated inside/outside activity stats for a pet - the same data
+behind the app's activity view.
+
+| Property | Type | Description |
+|---|---|---|
+| `payload.petId` | string | Pet ID that was queried (overridable via `msg.payload.petId`) |
+| `payload.fromDate` | string | Start date used, if a range was given (`YYYY-MM-DD`) |
+| `payload.toDate` | string | End date used, if a range was given (`YYYY-MM-DD`) |
+| `payload.report` | object | Raw `{ movement, feeding, drinking }` data. Movement entries have `from`/`to` timestamps and a `duration` in seconds spent outside. |
+
+`msg.payload.fromDate`/`msg.payload.toDate` must be given together, or omitted together.
+Omitting both uses the API's default range - the underlying endpoint can return a very
+large response when unbounded, so prefer an explicit range for anything beyond a quick
+check. This is a one-off lookup triggered by an input message, not a poller.
+
 ## Reliability
 
 Every API call - polling or control - automatically retries on `429` (rate limit) and
@@ -86,7 +102,7 @@ npm install node-red-contrib-surepetcare
 
 ## Configuration
 
-1. Add any `surepetcare-pets`, `surepetcare-control`, or `surepetcare-devices` node to your flow
+1. Add any `surepetcare-pets`, `surepetcare-control`, `surepetcare-devices`, or `surepetcare-report` node to your flow
 2. Create a new **SurePetcare config** node with your account email and password
 3. A stable device ID is generated automatically on first save
 

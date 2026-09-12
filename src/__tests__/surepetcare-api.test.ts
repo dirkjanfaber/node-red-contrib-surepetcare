@@ -320,6 +320,59 @@ describe('SurepetcareAPI', () => {
     });
   });
 
+  // --- getPetReport ---
+
+  describe('getPetReport()', () => {
+    beforeEach(async () => {
+      mock.onPost(`${BASE_URL}/auth/login`).reply(200, { data: { token: MOCK_TOKEN } });
+      mock.onGet(`${BASE_URL}/device`).reply(200, MOCK_DEVICES_RESPONSE);
+      await api.authenticate();
+    });
+
+    it('resolves the household ID from getDevices and calls the aggregate report endpoint', async () => {
+      mock
+        .onGet(`${BASE_URL}/report/household/${MOCK_DEVICES_RESPONSE.data[0].household_id}/pet/5/aggregate`)
+        .reply(200, { data: { movement: { datapoints: [] } } });
+
+      const report = await api.getPetReport('5');
+
+      expect(report).toEqual({ movement: { datapoints: [] } });
+    });
+
+    it('passes from/to as query params when both are given', async () => {
+      const relativeUrl = `/report/household/${MOCK_DEVICES_RESPONSE.data[0].household_id}/pet/5/aggregate`;
+      mock.onGet(`${BASE_URL}${relativeUrl}`).reply(200, { data: {} });
+
+      await api.getPetReport('5', '2026-09-01', '2026-09-12');
+
+      const call = mock.history.get.find(c => c.url === relativeUrl);
+      expect(call!.params).toEqual({ from: '2026-09-01', to: '2026-09-12' });
+    });
+
+    it('omits from/to when not given', async () => {
+      const relativeUrl = `/report/household/${MOCK_DEVICES_RESPONSE.data[0].household_id}/pet/5/aggregate`;
+      mock.onGet(`${BASE_URL}${relativeUrl}`).reply(200, { data: {} });
+
+      await api.getPetReport('5');
+
+      const call = mock.history.get.find(c => c.url === relativeUrl);
+      expect(call!.params).toEqual({});
+    });
+
+    it('throws when no devices (and so no household ID) can be found', async () => {
+      mock.onGet(`${BASE_URL}/device`).reply(200, { data: [] });
+
+      await expect(api.getPetReport('5')).rejects.toThrow('household');
+    });
+
+    it('re-authenticates and retries on 401', async () => {
+      const url = `${BASE_URL}/report/household/${MOCK_DEVICES_RESPONSE.data[0].household_id}/pet/5/aggregate`;
+      mock.onGet(url).replyOnce(401).onGet(url).reply(200, { data: {} });
+
+      await expect(api.getPetReport('5')).resolves.toEqual({});
+    });
+  });
+
   // --- setLockState ---
 
   describe('setLockState()', () => {
