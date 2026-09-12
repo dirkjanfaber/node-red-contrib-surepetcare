@@ -81,7 +81,7 @@ describe('surepetcare-pets node', () => {
     expect(messages[1].payload.location).toBe('outside');
   });
 
-  it('should set status to green on successful poll', async () => {
+  it('should list each pet\'s name and location in status when there are two pets', async () => {
     await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
     const cfg = helper.getNode('cfg1') as any;
     cfg.getAPI = () => mockAPI;
@@ -90,7 +90,56 @@ describe('surepetcare-pets node', () => {
     await n1.poll();
 
     const lastArg = (n1.status as any).lastCall?.args[0];
-    expect(lastArg).toMatchObject({ fill: 'green' });
+    expect(lastArg).toMatchObject({ fill: 'green', text: 'Whiskers: inside, Shadow: outside' });
+  });
+
+  it('should fall back to an inside/outside count summary when there are more than two pets', async () => {
+    const manyPetsAPI = {
+      ...mockAPI,
+      getPets: jest.fn().mockResolvedValue([
+        { id: 1, name: 'Whiskers', position: { where: 1 } },
+        { id: 2, name: 'Shadow', position: { where: 2 } },
+        { id: 3, name: 'Tom', position: { where: 1 } },
+      ]),
+    };
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => manyPetsAPI;
+    const n1 = helper.getNode('n1') as any;
+
+    await n1.poll();
+
+    const lastArg = (n1.status as any).lastCall?.args[0];
+    expect(lastArg).toMatchObject({ fill: 'green', text: '2 inside, 1 outside' });
+  });
+
+  it('should show the single pet\'s name and location in status when there is only one pet', async () => {
+    const singlePetAPI = {
+      ...mockAPI,
+      getPets: jest.fn().mockResolvedValue([{ id: 1, name: 'Whiskers', position: { where: 1 } }]),
+    };
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => singlePetAPI;
+    const n1 = helper.getNode('n1') as any;
+
+    await n1.poll();
+
+    const lastArg = (n1.status as any).lastCall?.args[0];
+    expect(lastArg).toMatchObject({ fill: 'green', text: 'Whiskers: inside' });
+  });
+
+  it('should show a "no pets" status when the household has none', async () => {
+    const noPetsAPI = { ...mockAPI, getPets: jest.fn().mockResolvedValue([]) };
+    await helper.load([surepetcareConfig, surepetcarePets], makeFlow());
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => noPetsAPI;
+    const n1 = helper.getNode('n1') as any;
+
+    await n1.poll();
+
+    const lastArg = (n1.status as any).lastCall?.args[0];
+    expect(lastArg).toMatchObject({ fill: 'green', text: 'no pets' });
   });
 
   it('should set status to red and emit node.error on API failure', async () => {

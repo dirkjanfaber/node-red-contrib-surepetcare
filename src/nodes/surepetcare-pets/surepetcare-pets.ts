@@ -29,7 +29,19 @@ export = function (RED: NodeAPI) {
             },
           });
         }
-        this.status({ fill: 'green', shape: 'dot', text: 'ok' });
+        let summary: string;
+        if (pets.length === 0) {
+          summary = 'no pets';
+        } else if (pets.length <= 2) {
+          summary = pets
+            .map(p => `${p.name}: ${p.position.where === 1 ? 'inside' : 'outside'}`)
+            .join(', ');
+        } else {
+          const inside = pets.filter(p => p.position.where === 1).length;
+          const outside = pets.length - inside;
+          summary = `${inside} inside, ${outside} outside`;
+        }
+        this.status({ fill: 'green', shape: 'dot', text: summary });
       } catch (err: any) {
         this.status({ fill: 'red', shape: 'ring', text: err.message });
         this.error(err.message);
