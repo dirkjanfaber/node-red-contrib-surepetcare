@@ -54,6 +54,7 @@ const mockAPI: SurepetcareBackend = {
     },
   ]),
   getPetReport: jest.fn().mockResolvedValue({}),
+  setPetLocation: jest.fn().mockResolvedValue(undefined),
 };
 
 describe('surepetcare-devices node', () => {

@@ -16,6 +16,7 @@ const mockAPI: SurepetcareBackend = {
     { id: 10, name: 'Front Door', serial_number: 'H008-0001', product_id: 6, household_id: 1 },
   ]),
   getPetReport: jest.fn().mockResolvedValue({}),
+  setPetLocation: jest.fn().mockResolvedValue(undefined),
 };
 
 function makeFlow(deviceId = '10', lockState: number | undefined = undefined) {

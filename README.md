@@ -34,6 +34,13 @@ Sets the lock state of a SureFlap cat flap, or renames the device.
 Both `deviceId` and `lockState` can be overridden per message via `msg.payload`. If
 `msg.payload.name` is set instead, the device is renamed rather than locked.
 
+### `surepetcare-pet-control`
+Sets a pet's inside/outside status directly - useful for linking an automation (e.g. a
+door sensor) to a pet's recorded location, without needing a flap event.
+
+Both `petId` and `location` (`inside`/`outside`) can be overridden per message via
+`msg.payload`.
+
 ### `surepetcare-devices`
 Polls the SurePetcare API for device status. Emits one message per device:
 
@@ -102,7 +109,7 @@ npm install node-red-contrib-surepetcare
 
 ## Configuration
 
-1. Add any `surepetcare-pets`, `surepetcare-control`, `surepetcare-devices`, or `surepetcare-report` node to your flow
+1. Add any `surepetcare-pets`, `surepetcare-control`, `surepetcare-pet-control`, `surepetcare-devices`, or `surepetcare-report` node to your flow
 2. Create a new **SurePetcare config** node with your account email and password
 3. A stable device ID is generated automatically on first save
 

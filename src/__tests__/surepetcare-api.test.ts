@@ -476,6 +476,81 @@ describe('SurepetcareAPI', () => {
     });
   });
 
+  // --- setPetLocation ---
+
+  describe('setPetLocation()', () => {
+    beforeEach(async () => {
+      mock.onPost(`${BASE_URL}/auth/login`).reply(200, { data: { token: MOCK_TOKEN } });
+      await api.authenticate();
+    });
+
+    it('sends POST with where=1 for inside', async () => {
+      mock.onPost(`${BASE_URL}/pet/5/position`).reply(200, { data: {} });
+
+      await api.setPetLocation('5', 1);
+
+      const call = mock.history.post.find(c => c.url === '/pet/5/position');
+      expect(JSON.parse(call!.data).where).toBe(1);
+    });
+
+    it('sends POST with where=2 for outside', async () => {
+      mock.onPost(`${BASE_URL}/pet/5/position`).reply(200, { data: {} });
+
+      await api.setPetLocation('5', 2);
+
+      const call = mock.history.post.find(c => c.url === '/pet/5/position');
+      expect(JSON.parse(call!.data).where).toBe(2);
+    });
+
+    it('includes a since timestamp', async () => {
+      mock.onPost(`${BASE_URL}/pet/5/position`).reply(200, { data: {} });
+
+      await api.setPetLocation('5', 1);
+
+      const call = mock.history.post.find(c => c.url === '/pet/5/position');
+      expect(JSON.parse(call!.data).since).toEqual(expect.any(String));
+    });
+
+    it('sends Bearer token in the Authorization header', async () => {
+      mock.onPost(`${BASE_URL}/pet/5/position`).reply(200, { data: {} });
+
+      await api.setPetLocation('5', 1);
+
+      const call = mock.history.post.find(c => c.url === '/pet/5/position');
+      expect(call!.headers?.Authorization).toBe(`Bearer ${MOCK_TOKEN}`);
+    });
+
+    it('re-authenticates and retries on 401', async () => {
+      mock
+        .onPost(`${BASE_URL}/pet/5/position`)
+        .replyOnce(401)
+        .onPost(`${BASE_URL}/pet/5/position`)
+        .reply(200, { data: {} });
+
+      await api.setPetLocation('5', 1);
+
+      expect(mock.history.post.filter(c => c.url === '/auth/login')).toHaveLength(2);
+    });
+
+    it('throws on network error after exhausting retries', async () => {
+      mock.onPost(`${BASE_URL}/pet/5/position`).networkError();
+
+      await expect(api.setPetLocation('5', 1)).rejects.toThrow();
+    });
+
+    it('retries on 429 and succeeds once the rate limit clears', async () => {
+      mock
+        .onPost(`${BASE_URL}/pet/5/position`)
+        .replyOnce(429)
+        .onPost(`${BASE_URL}/pet/5/position`)
+        .reply(200, { data: {} });
+
+      await api.setPetLocation('5', 2);
+
+      expect(mock.history.post.filter(c => c.url === '/pet/5/position')).toHaveLength(2);
+    });
+  });
+
   describe('retry configuration', () => {
     it('actually waits out the configured delay before retrying', async () => {
       const delayedApi = new SurepetcareAPI(

@@ -140,6 +140,18 @@ export class SurepetcareAPI implements SurepetcareBackend {
     });
   }
 
+  async setPetLocation(petId: string, where: 1 | 2): Promise<void> {
+    await this.authenticate();
+    return this.withRetry(async () => {
+      // "Y-m-d H:i", matching the reference implementation this endpoint
+      // was reverse-engineered from (alextoft/sureflap's setPetLocation.php).
+      const since = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      await this.http.post(`/pet/${petId}/position`, { where, since }, {
+        headers: this.authHeaders(),
+      });
+    });
+  }
+
   async getPetReport(petId: string, fromDate?: string, toDate?: string): Promise<unknown> {
     await this.authenticate();
 

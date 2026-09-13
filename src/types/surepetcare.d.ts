@@ -49,4 +49,5 @@ export interface SurepetcareBackend {
   renameDevice(deviceId: string, name: string): Promise<void>;
   getDevices(): Promise<Device[]>;
   getPetReport(petId: string, fromDate?: string, toDate?: string): Promise<unknown>;
+  setPetLocation(petId: string, where: 1 | 2): Promise<void>;
 }

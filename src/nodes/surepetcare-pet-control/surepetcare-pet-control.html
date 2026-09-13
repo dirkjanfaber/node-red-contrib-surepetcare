@@ -1,0 +1,112 @@
+<script type="text/javascript">
+  RED.nodes.registerType('surepetcare-pet-control', {
+    category: 'SureFlap',
+    color: '#a1665e',
+    defaults: {
+      name: { value: '' },
+      config: { value: '', type: 'surepetcare-config', required: true },
+      petId: { value: '' },
+      location: { value: 'inside' },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'paw.svg',
+    label: function () {
+      return this.name || 'surepetcare pet control';
+    },
+    paletteLabel: 'surepetcare pet control',
+    oneditprepare: function () {
+      const node = this;
+
+      // Pre-populate select with the stored pet ID so it isn't lost before discovery
+      if (node.petId) {
+        $('#node-input-petId')
+          .empty()
+          .append($('<option>', { value: node.petId, text: 'Pet ' + node.petId }))
+          .val(node.petId);
+      }
+
+      $('#node-btn-discover').on('click', function () {
+        const configId = $('#node-input-config').val();
+        if (!configId) {
+          RED.notify('Select and deploy a config node first.', { type: 'warning' });
+          return;
+        }
+        const btn = $(this).prop('disabled', true);
+        btn.find('i').attr('class', 'fa fa-spinner fa-spin');
+
+        $.getJSON('/surepetcare/pets?id=' + configId)
+          .done(function (pets) {
+            const select = $('#node-input-petId');
+            const current = select.val() || node.petId;
+            select.empty();
+            if (!pets.length) {
+              select.append($('<option>', { value: '', text: '— no pets found —' }));
+            }
+            pets.forEach(function (p) {
+              select.append($('<option>', { value: String(p.id), text: p.name }));
+            });
+            select.val(current);
+            if (!select.val() && pets.length) {
+              select.val(String(pets[0].id));
+            }
+          })
+          .fail(function (xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Request failed';
+            RED.notify('Discover failed: ' + msg, { type: 'error' });
+          })
+          .always(function () {
+            btn.prop('disabled', false).find('i').attr('class', 'fa fa-search');
+          });
+      });
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="surepetcare-pet-control">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-config"><i class="fa fa-cog"></i> Config</label>
+    <input type="text" id="node-input-config" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-petId"><i class="fa fa-paw"></i> Pet</label>
+    <select id="node-input-petId" style="width:45%">
+      <option value="">— click Discover —</option>
+    </select>
+    <button type="button" id="node-btn-discover" class="red-ui-button" style="margin-left:6px">
+      <i class="fa fa-search"></i> Discover
+    </button>
+  </div>
+  <div class="form-row">
+    <label for="node-input-location"><i class="fa fa-map-marker"></i> Location</label>
+    <select id="node-input-location">
+      <option value="inside">Inside</option>
+      <option value="outside">Outside</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="surepetcare-pet-control">
+  <p>Sets a pet's inside/outside status directly, without needing a flap event - useful for
+  linking an automation (e.g. a door sensor) to a pet's recorded location.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt class="optional">payload.location <span class="property-type">string</span></dt>
+    <dd>Override the configured location: <code>inside</code> or <code>outside</code></dd>
+    <dt class="optional">payload.petId <span class="property-type">string</span></dt>
+    <dd>Override the configured pet ID</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload.petId <span class="property-type">string</span></dt>
+    <dd>Pet ID that was targeted</dd>
+    <dt>payload.location <span class="property-type">string</span></dt>
+    <dd><code>inside</code> or <code>outside</code> - the location that was applied</dd>
+    <dt>payload.where <span class="property-type">number</span></dt>
+    <dd>Raw value sent to the API: 1 = inside, 2 = outside</dd>
+  </dl>
+</script>

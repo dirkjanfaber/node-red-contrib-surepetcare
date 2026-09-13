@@ -18,6 +18,8 @@ A Node-RED node package for interacting with the SurePetcare/SureFlap Connect se
 2. **`sureflap-pets`** — polls pet locations, emits messages per cat
 3. **`sureflap-control`** — sets flap lock state (open/locked-in/locked-out/locked)
 4. **`surepetcare-devices`** — polls device lock state and curfew schedule, emits messages per device (built under the post-rename `surepetcare-` prefix — see Notes)
+5. **`surepetcare-pet-control`** — sets a pet's inside/outside status directly (`POST /pet/{petId}/position`), for linking automations (e.g. a door sensor) to a pet's recorded location without a flap event
+6. **`surepetcare-report`** — on-demand lookup of aggregated pet activity stats (built after this doc's node list was written — see Notes)
 
 ### Directory structure
 
@@ -79,6 +81,20 @@ Response: `{ data: [ { id, name, position: { where: 1|2 } } ] }`
 
 - `where: 1` = inside
 - `where: 2` = outside
+
+To set a pet's location directly (used by `surepetcare-pet-control`, e.g. to link a door
+sensor automation to a pet's recorded status):
+
+```
+POST /pet/{pet_id}/position
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{ "where": 1|2, "since": "Y-m-d H:i" }
+```
+
+`since` uses `Y-m-d H:i` (no seconds, no timezone offset) - matches the format used by
+alextoft/sureflap's `setPetLocation.php`, which this endpoint was reverse-engineered from.
 
 ### Devices
 

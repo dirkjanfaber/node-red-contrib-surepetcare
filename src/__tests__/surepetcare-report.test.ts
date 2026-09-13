@@ -25,6 +25,7 @@ const mockAPI: SurepetcareBackend = {
   renameDevice: jest.fn().mockResolvedValue(undefined),
   getDevices: jest.fn().mockResolvedValue([]),
   getPetReport: jest.fn().mockResolvedValue(REPORT_WITH_MOVEMENT),
+  setPetLocation: jest.fn().mockResolvedValue(undefined),
 };
 
 function makeFlow(petId = '770878') {
