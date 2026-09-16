@@ -4,7 +4,7 @@
     "type": "tab",
     "label": "Daily Flap Rename",
     "disabled": false,
-    "info": "Renames your SurePetcare cat flap every day with a randomly chosen dramatic name, so you get messages like 'Minoes left through the Gates of Valhalla'.\n\n## Setup\n1. Configure the surepetcare-config node with your credentials\n2. Set the Device ID in the surepetcare-control node (numeric ID from GET /device)\n3. Deploy and click the inject node's button to test it immediately\n4. The flow fires automatically every day at 00:01\n\n## Notes\n- All names are phrased to read naturally in '$cat left through $name'\n- If you have multiple flaps, adjust the Device ID in the control node to target a specific one"
+    "info": "Renames your SurePetcare cat flap every day with a randomly chosen dramatic name, so you get messages like 'Minoes left through the Gates of Valhalla'.\n\n## Setup\n1. Configure the surepetcare-config node with your credentials\n2. Set the Device ID in the surepetcare-control node (numeric ID from GET /device)\n3. Deploy and click the inject node's button to test it immediately\n4. The flow fires automatically every day at 00:01\n\n## Notes\n- All names are phrased to read naturally in '$cat left through $name'\n- If you have multiple flaps, adjust the Device ID in the control node to target a specific one\n- 'Skip If Curfew Active' polls 'Check Curfew' (a one-shot surepetcare-devices read, pollInterval 0) and cancels the rename if any device's configured curfew window currently covers the trigger time. This isn't a leftover caution - the rename endpoint (PUT /device/{id}) has been observed to reset the flap's lock as a side effect, even though locking isn't part of the request. At 00:01 that side effect lands squarely inside most curfew windows, silently dropping whatever protection - including a full both-ways lock applied by escalation flows like examples/curfew-full-lock.json - was active at the time. The check reads the curfew schedule itself (lock_time/unlock_time) rather than the device's live lock state, so it still catches an already-escalated full lock, which a state-based check would miss\n- With multiple flaps, the curfew check runs per device but the rename always targets the single Device ID configured on 'Rename Flap' - if one flap's curfew is active it will hold back a rename meant for a different, curfew-free flap too. Split into separate rename flows per device if that matters for your setup"
   },
   {
     "id": "rename-cfg",
@@ -26,6 +26,33 @@
     "payloadType": "date",
     "x": 160,
     "y": 140,
+    "wires": [["rename-check-curfew"]]
+  },
+  {
+    "id": "rename-check-curfew",
+    "type": "surepetcare-devices",
+    "z": "tab-daily-rename",
+    "name": "Check Curfew",
+    "config": "rename-cfg",
+    "pollInterval": 0,
+    "x": 350,
+    "y": 140,
+    "wires": [["rename-curfew-gate"]]
+  },
+  {
+    "id": "rename-curfew-gate",
+    "type": "function",
+    "z": "tab-daily-rename",
+    "name": "Skip If Curfew Active",
+    "func": "// The rename endpoint has a side effect of resetting the flap's lock, so\n// never rename while a configured curfew window currently covers this\n// device - that would silently drop whatever protection (one-way or a\n// fully escalated both-ways lock) is in force. Checked against the curfew\n// schedule itself rather than the device's live lock state, since an\n// already-escalated full lock no longer reports the live curfew-engaged\n// state that a lockingMode-based check would look for.\n//\n// lock_time/unlock_time are in UTC - compare against the UTC clock fields,\n// not local ones, or this fires hours off from the real schedule on a\n// device whose system clock is local (confirmed live against real data).\nfunction toMinutes(hhmm) {\n    const [h, m] = hhmm.split(':').map(Number);\n    return h * 60 + m;\n}\n\nconst curfews = msg.payload.curfew || [];\nconst now = new Date();\nconst nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();\n\nconst curfewActive = curfews.some(c => {\n    if (!c.enabled) return false;\n    const lockMinutes = toMinutes(c.lock_time);\n    const unlockMinutes = toMinutes(c.unlock_time);\n    // Overnight windows (e.g. 20:00-07:00) wrap past midnight.\n    return lockMinutes <= unlockMinutes\n        ? nowMinutes >= lockMinutes && nowMinutes < unlockMinutes\n        : nowMinutes >= lockMinutes || nowMinutes < unlockMinutes;\n});\n\nif (curfewActive) {\n    node.status({ fill: 'yellow', shape: 'ring', text: 'curfew active - rename skipped' });\n    node.warn(`Skipping nightly rename for device ${msg.payload.deviceId} - curfew is currently active`);\n    return null;\n}\n\nnode.status({ fill: 'green', shape: 'dot', text: 'curfew clear - renaming' });\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 570,
+    "y": 140,
     "wires": [["rename-pick-name"]]
   },
   {
@@ -33,9 +60,9 @@
     "type": "function",
     "z": "tab-daily-rename",
     "name": "Pick Today's Name",
-    "func": "const names = [\n    // Mythological & Epic\n    'the Gates of Valhalla',\n    'the Bifrost',\n    'the Portal of Olympus',\n    'the Elysian Gateway',\n    'Styx Crossing',\n    \"the Oracle's Pass\",\n    \"Hades' Threshold\",\n    'the Asgardian Portal',\n    \"Schrödinger's Portal\",\n\n    // Sci-Fi\n    'Wormhole Alpha-7',\n    'the Transporter',\n    'Stargate One',\n    'the Event Horizon',\n    'Hyperspace Junction',\n    'the TARDIS',\n    'the Death Star Exhaust Port',\n    'the Holodeck Exit',\n\n    // Fantasy & Literature\n    'Platform 9¾',\n    'the Wardrobe to Narnia',\n    'the Black Gate of Mordor',\n    'the Mines of Moria',\n    'Rivendell Gateway',\n    \"Bag End's Back Door\",\n    \"the Shire's Secret Exit\",\n\n    // TV & Pop Culture\n    'the Twilight Zone',\n    'the Upside Down',\n    'the Phantom Zone',\n    'the Sunken Place',\n    'the Matrix Exit',\n    'the Westworld Gate',\n    \"Jumanji's Portal\",\n\n    // Dramatic & Theatrical\n    'the Grand Theatre of Departure',\n    'the Eternal Threshold',\n    'the Portal of Destiny',\n    'the Gateway to the Great Beyond',\n    'the Threshold of Eternity',\n    'the Majestic Passage',\n\n    // Silly & Punny\n    'the Paw-tal',\n    'the Meow-trix',\n    'the Feline Gateway',\n    'Whisker Warp',\n    'the Purr-tal Dimension',\n    'the Claws & Effect Portal',\n    'the Fur-bidden Zone',\n    'the Cat-acomb Entrance',\n    'the Hiss-toric Gateway',\n    'Nine Lives Threshold',\n    'the Pounce Point',\n\n    // Historical\n    'the Thermopylae Pass',\n    \"Hadrian's Cat Door\",\n    'the Agincourt Gate',\n    \"Brandenburg's Cat Portal\",\n\n    // Cosmic\n    'the Black Hole',\n    'the Nebula Gate',\n    'Andromeda Crossing',\n    'the Cosmic Radiation Zone'\n];\n\nmsg.payload = { name: names[Math.floor(Math.random() * names.length)] };\nreturn msg;",
+    "func": "const names = [\n    // Mythological & Epic\n    'the Gates of Valhalla',\n    'the Bifrost',\n    'the Portal of Olympus',\n    'the Elysian Gateway',\n    'Styx Crossing',\n    \"the Oracle's Pass\",\n    \"Hades' Threshold\",\n    'the Asgardian Portal',\n    \"Schrödinger's Portal\",\n\n    // Sci-Fi\n    'Wormhole Alpha-7',\n    'the Transporter',\n    'Stargate One',\n    'the Event Horizon',\n    'Hyperspace Junction',\n    'the TARDIS',\n    'the Death Star Exhaust Port',\n    'the Holodeck Exit',\n\n    // Fantasy & Literature\n    'Platform 9¾',\n    'the Wardrobe to Narnia',\n    'the Black Gate of Mordor',\n    'the Mines of Moria',\n    'Rivendell Gateway',\n    \"Bag End's Back Door\",\n    \"the Shire's Secret Exit\",\n\n    // TV & Pop Culture\n    'the Twilight Zone',\n    'the Upside Down',\n    'the Phantom Zone',\n    'the Sunken Place',\n    'the Matrix Exit',\n    'the Westworld Gate',\n    \"Jumanji's Portal\",\n\n    // Dramatic & Theatrical\n    'the Grand Theatre of Departure',\n    'the Eternal Threshold',\n    'the Portal of Destiny',\n    'the Gateway to the Great Beyond',\n    'the Threshold of Eternity',\n    'the Majestic Passage',\n\n    // Silly & Punny\n    'the Paw-tal',\n    'the Meow-trix',\n    'the Feline Gateway',\n    'Whisker Warp',\n    'the Purr-tal Dimension',\n    'the Claws & Effect Portal',\n    'the Fur-bidden Zone',\n    'the Cat-acomb Entrance',\n    'the Hiss-toric Gateway',\n    'Nine Lives Threshold',\n    'the Pounce Point',\n\n    // Historical\n    'the Thermopylae Pass',\n    \"Hadrian's Cat Door\",\n    'the Agincourt Gate',\n    \"Brandenburg's Cat Portal\",\n\n    // Cosmic\n    'the Black Hole',\n    'the Nebula Gate',\n    'Andromeda Crossing',\n    'the Cosmic Radiation Zone'\n];\n\nmsg.payload = { name: names[Math.floor(Math.random() * names.length)] };\nnode.status({ fill: 'green', shape: 'dot', text: msg.payload.name });\nreturn msg;",
     "outputs": 1,
-    "x": 380,
+    "x": 780,
     "y": 140,
     "wires": [["rename-control"]]
   },
@@ -47,7 +74,7 @@
     "config": "rename-cfg",
     "deviceId": "",
     "lockState": 0,
-    "x": 600,
+    "x": 1000,
     "y": 140,
     "wires": [["rename-debug"]]
   },
@@ -64,7 +91,7 @@
     "targetType": "msg",
     "statusVal": "",
     "statusType": "auto",
-    "x": 800,
+    "x": 1200,
     "y": 140,
     "wires": []
   },
