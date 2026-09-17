@@ -39,16 +39,24 @@
           1: 'Hub', 3: 'Pet Door Connect', 6: 'Cat Flap Connect',
           8: 'Feeder Connect', 13: 'Felaqua', 58: 'Dual Scan Cat Flap'
         };
+        // Devices with no lock to control - kept off this picker so a lock
+        // action can never be pointed at one. Mirrors NON_LOCKABLE_PRODUCTS
+        // in surepetcare-control.ts, which still refuses these at runtime
+        // (e.g. for a device typed directly into msg.payload.deviceId).
+        const nonLockableProductIds = [1, 8, 13];
 
         $.getJSON('/surepetcare/devices?id=' + configId)
           .done(function (devices) {
             const select = $('#node-input-deviceId');
             const current = select.val() || node.deviceId;
+            const lockable = devices.filter(function (d) {
+              return nonLockableProductIds.indexOf(d.product_id) === -1;
+            });
             select.empty();
-            if (!devices.length) {
-              select.append($('<option>', { value: '', text: '— no devices found —' }));
+            if (!lockable.length) {
+              select.append($('<option>', { value: '', text: '— no lockable devices found —' }));
             }
-            devices.forEach(function (d) {
+            lockable.forEach(function (d) {
               const product = productNames[d.product_id] || 'Device';
               select.append($('<option>', {
                 value: String(d.id),
@@ -56,8 +64,8 @@
               }));
             });
             select.val(current);
-            if (!select.val() && devices.length) {
-              select.val(String(devices[0].id));
+            if (!select.val() && lockable.length) {
+              select.val(String(lockable[0].id));
             }
           })
           .fail(function (xhr) {
@@ -104,6 +112,7 @@
 <script type="text/html" data-help-name="surepetcare-control">
   <p>Controls a SureFlap cat flap: sets the lock state or renames the device.</p>
   <p>If <code>msg.payload.name</code> is set the device is renamed. Otherwise the lock state is applied.</p>
+  <p>Lock state changes only work on flap devices (Pet Door Connect, Cat Flap Connect, Dual Scan Cat Flap). The Discover picker only lists those; targeting a Hub, Feeder Connect or Felaqua via <code>msg.payload.deviceId</code> instead reports an error and does nothing. Renaming works on any device type.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt class="optional">payload.name <span class="property-type">string</span></dt>

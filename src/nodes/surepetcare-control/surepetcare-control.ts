@@ -8,6 +8,16 @@ const LOCK_STATE_LABELS: Record<LockState, string> = {
   3: 'locked both ways',
 };
 
+// SurePetcare product IDs that don't have a lock to control (kept in sync
+// with the productNames map in surepetcare-control.html, which also uses it
+// to keep these off the editor's device picker). Unrecognised product IDs
+// are assumed lockable so a newer/unlisted product isn't blocked here.
+const NON_LOCKABLE_PRODUCTS: Record<number, string> = {
+  1: 'Hub',
+  8: 'Feeder Connect',
+  13: 'Felaqua',
+};
+
 interface SurepetcareControlNodeDef extends NodeDef {
   config: string;
   deviceId: string;
@@ -31,6 +41,16 @@ export = function (RED: NodeAPI) {
           this.status({ fill: 'green', shape: 'dot', text: `renamed: ${name}` });
           msg.payload = { deviceId, name };
         } else {
+          const devices = await api.getDevices();
+          const device = devices.find(d => String(d.id) === deviceId);
+          const nonLockableProduct = device ? NON_LOCKABLE_PRODUCTS[device.product_id] : undefined;
+          if (nonLockableProduct !== undefined) {
+            const message = `Device ${deviceId} (${device!.name}) is a ${nonLockableProduct} and does not support lock control`;
+            this.status({ fill: 'red', shape: 'ring', text: `${nonLockableProduct}: no lock control` });
+            this.error(message, msg);
+            return;
+          }
+
           const lockState: LockState = msg.payload?.lockState ?? config.lockState;
           await api.setLockState(deviceId, lockState);
           const label = LOCK_STATE_LABELS[Number(lockState) as LockState] ?? 'unknown';

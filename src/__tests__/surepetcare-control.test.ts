@@ -196,4 +196,61 @@ describe('surepetcare-control node', () => {
     const lastArg = (n1.status as any).lastCall?.args[0];
     expect(lastArg).toMatchObject({ fill: 'red' });
   });
+
+  it('should refuse to lock a non-lockable device (e.g. a Hub) with a friendly error, without calling setLockState', async () => {
+    const hubAPI = {
+      ...mockAPI,
+      getDevices: jest.fn().mockResolvedValue([
+        { id: 20, name: 'Platform 9¾', serial_number: 'H005-0001', product_id: 1, household_id: 1 },
+      ]),
+    };
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('20', 3));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => hubAPI;
+    const n1 = helper.getNode('n1') as any;
+
+    n1.receive({ payload: {} });
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(hubAPI.setLockState).not.toHaveBeenCalled();
+    const errorArgs = (n1.error as any).lastCall?.args;
+    expect(errorArgs?.[0]).toContain('Platform 9¾');
+    const lastArg = (n1.status as any).lastCall?.args[0];
+    expect(lastArg).toMatchObject({ fill: 'red' });
+    expect(lastArg.text).toContain('Hub');
+  });
+
+  it('should still allow renaming a non-lockable device (e.g. a Hub)', async () => {
+    const hubAPI = {
+      ...mockAPI,
+      getDevices: jest.fn().mockResolvedValue([
+        { id: 20, name: 'Platform 9¾', serial_number: 'H005-0001', product_id: 1, household_id: 1 },
+      ]),
+    };
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('20', 0));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => hubAPI;
+    const n2 = helper.getNode('n2');
+
+    const msgReceived = new Promise<any>(resolve => n2.on('input', resolve));
+    helper.getNode('n1').receive({ payload: { name: 'New Hub Name' } });
+    const msg = await msgReceived;
+
+    expect(hubAPI.renameDevice).toHaveBeenCalledWith('20', 'New Hub Name');
+    expect(msg.payload).toMatchObject({ deviceId: '20', name: 'New Hub Name' });
+  });
+
+  it('should proceed with setLockState when the target device is unknown to getDevices (fail open)', async () => {
+    const unknownDeviceAPI = { ...mockAPI, getDevices: jest.fn().mockResolvedValue([]) };
+    await helper.load([surepetcareConfig, surepetcareControl], makeFlow('999', 3));
+    const cfg = helper.getNode('cfg1') as any;
+    cfg.getAPI = () => unknownDeviceAPI;
+    const n2 = helper.getNode('n2');
+
+    const msgReceived = new Promise<any>(resolve => n2.on('input', resolve));
+    helper.getNode('n1').receive({ payload: {} });
+    await msgReceived;
+
+    expect(unknownDeviceAPI.setLockState).toHaveBeenCalledWith('999', 3);
+  });
 });
