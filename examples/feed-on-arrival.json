@@ -1,0 +1,253 @@
+[
+  {
+    "id": "tab-feed-on-arrival",
+    "type": "tab",
+    "label": "Feed On Arrival",
+    "disabled": false,
+    "info": "Dispenses each cat's meal from her PetKit feeder for breakfast/lunch/dinner, using the flap as the presence signal - but only once per meal, whether she was already home when the window opened or wanders in partway through it.\n\n## Why\nA pure \"feed her when she walks in\" trigger doesn't cover breakfast: a cat who slept inside never crosses the flap that morning, so there's no arrival event to hang the check on. This mirrors the two-sided check `cat-feeder/DESIGN.md` already sketched for the future on-device version - a scheduled check (who's home *right when the window opens*) plus an arrival-triggered catch-up (for whoever wasn't).\n\n## Why a subflow\nOne 'Feed Cat On Arrival' subflow instance per cat, configured via its own Name/Device/Amount/schedule properties rather than duplicated function-node code and a routing switch per cat. Adding a third cat is one more instance wired to the same shared triggers below, no code changes. Each instance's state (last known location, pending meal, today's fed flags) lives in its own node-scoped `context`, so instances never need to key anything by pet ID to avoid stepping on each other.\n\n## How it works\nTwo shared triggers, broadcast to every cat's subflow instance - each instance filters for its own cat and ignores the rest:\n\n1. **'Pet Locations'** (polls every 60s) - each instance tracks its own cat's last-seen location and detects a genuine outside -> inside transition (arrival).\n2. **'Open breakfast/lunch/dinner'** (one inject per window, fired at the window's start time) - each instance checks its own cat's last-known location:\n   - Already inside -> feed immediately, mark that meal fed.\n   - Outside -> mark that meal \"pending\", with a catch-up deadline one hour before the *next* window opens (e.g. a missed breakfast can still be caught up right until 11:00, if lunch opens at 12:00).\n\nOn arrival, if there's a still-valid pending meal, the instance feeds and clears it; otherwise nothing happens. Either path is deduplicated per (cat, meal, date), so re-entering the house five times during lunch only feeds her once.\n\n**No makeup meals**: only the single most recent pending meal is ever tracked per cat. If she's still outside when the *next* window opens, that window's own scheduled check overwrites the pending slot rather than stacking a second catch-up - she doesn't get to eat a missed breakfast and lunch back to back for showing up at 12:01. She needs to be home for the window, or catch the one-hour grace period after.\n\n**Manual meals**: any window can be marked `\"auto\": false` in `MEAL_WINDOWS` (dinner, by default, in this example) - it still checks and reports whether she's home when the window opens, but never dispenses or tracks pending/catch-up for it. That's a deliberate opt-out, not a bug: a feeder that does literally everything leaves nothing for you to actually show up for, and dinner is worth keeping as a moment you're there for, not a cron job.\n\nEach instance has two outputs: **Feed Result** (what the petkit-feeder-control node actually sent/returned) and **Events** (every `fed` / `pending` / `missed` / `arrival` / `pruned` transition, for monitoring) - both from every cat feed into the shared 'Result' and 'Events' debug tabs.\n\n## Setup\n1. Configure the surepetcare-config node with your SurePetcare credentials\n2. Configure the petkit-config node with your PetKit credentials\n3. For each cat's subflow instance: set `PET_NAME` to exactly match the name SurePetcare reports for her, and `FEEDER_DEVICE_ID` to her PetKit feeder's device ID (find it via a `petkit-feeder` node or the PetKit app)\n4. Adjust `AMOUNT` per instance to match one scoop for that cat's hardware - PetKit's API treats it as an opaque device unit (10/20/30/40/50), confirm the right value against the app rather than assuming it's grams\n5. Adjust `MEAL_WINDOWS` (JSON) and `CATCHUP_BUFFER_MIN` per instance if a cat needs a different schedule than the default breakfast/lunch/dinner, or a different meal set to `\"auto\": false` than the dinner default - and update the three 'Open <meal>' inject nodes' crontabs to match whichever start times you use\n6. Deploy - polling starts automatically\n\n## Notes\n- Breakfast is the common case where the cats are already inside when the window opens (they slept there) - the scheduled check fires the feed the moment `MEAL_WINDOWS[0].start` hits, without waiting on an arrival event that will never come that morning\n- Feeding-window times (both the inject crontabs and each instance's `MEAL_WINDOWS`) are plain local clock time - unlike the curfew flows' `lock_time`/`unlock_time`, which come from the SurePetcare API and are UTC (see `curfew-full-lock.json`), these are your own schedule with nothing to convert\n- The dinner -> breakfast gap wraps past midnight: a missed dinner's catch-up deadline is one hour before the *next day's* breakfast, computed from a real timestamp rather than a same-day date string, so it survives the date rollover correctly\n- Adding a cat is one more subflow instance wired to the same 'Pet Locations' and 'Open <meal>' nodes - nothing else changes\n- No cross-cat theft risk here even without presence-linked feeding logic, because each cat already has her own physically separate feeder/bowl (see `cat-feeder/DESIGN.md`) - dispensing into cat A's bowl can't be eaten by cat B\n- This is a cloud-dependent bridge (SurePetcare poll -> PetKit cloud dispense), not the on-device feeding decision `cat-feeder/DESIGN.md` plans for the future ESPHome hardware mod - that design explicitly keeps the feeding decision off the cloud/Node-RED stack for reliability. Treat this flow as a convenience for the current stock-firmware feeders, not the long-term design\n- Each instance's `fed_<meal>_<date>` context keys accumulate one per window per day forever if never pruned; a daily 'prune' broadcast (00:05) tells every instance to drop yesterday's and older\n- Errors (network issues, auth failures on either API) are caught and shown in the 'Error' debug tab rather than crashing the flow"
+  },
+  {
+    "id": "sf-feed-cat",
+    "type": "subflow",
+    "name": "Feed Cat On Arrival",
+    "info": "Per-cat feeding state machine - see the 'Feed On Arrival' tab's info panel for the full design.\n\nInputs (broadcast to every instance, each instance filters for its own cat):\n- a surepetcare-pets location message (`payload.name`/`payload.location`)\n- a meal-window-open trigger (`payload` = `\"breakfast\"` / `\"lunch\"` / `\"dinner\"`, whatever your MEAL_WINDOWS names are)\n- a prune trigger (`payload` = `\"prune\"`)\n\nEach entry in `MEAL_WINDOWS` has an `auto` flag (default `true`). Set it `false` (the default for `dinner` here) to turn that meal into a reminder only - the window-open check still runs and reports whether she's home, but never dispenses. Handy for a meal you'd rather serve yourself.\n\nOutputs:\n1. Feed Result - the petkit-feeder-control node's outcome when this cat is fed automatically\n2. Events - `fed` / `pending` / `missed` / `arrival` / `manual_reminder` / `pruned` status messages, for monitoring",
+    "category": "SurePetcare",
+    "in": [
+      {
+        "x": 60,
+        "y": 100,
+        "wires": [{ "id": "sf-handle-event" }]
+      }
+    ],
+    "out": [
+      {
+        "x": 480,
+        "y": 60,
+        "wires": [{ "id": "sf-feed", "port": 0 }]
+      },
+      {
+        "x": 480,
+        "y": 160,
+        "wires": [{ "id": "sf-handle-event", "port": 1 }]
+      }
+    ],
+    "env": [
+      { "name": "PET_NAME", "type": "str", "value": "" },
+      { "name": "FEEDER_DEVICE_ID", "type": "str", "value": "" },
+      { "name": "AMOUNT", "type": "num", "value": "20" },
+      { "name": "CATCHUP_BUFFER_MIN", "type": "num", "value": "60" },
+      {
+        "name": "MEAL_WINDOWS",
+        "type": "str",
+        "value": "[{\"name\":\"breakfast\",\"start\":\"07:00\",\"end\":\"09:00\",\"auto\":true},{\"name\":\"lunch\",\"start\":\"12:00\",\"end\":\"14:00\",\"auto\":true},{\"name\":\"dinner\",\"start\":\"18:00\",\"end\":\"20:00\",\"auto\":false}]"
+      }
+    ],
+    "meta": {},
+    "color": "#a1665e"
+  },
+  {
+    "id": "sf-handle-event",
+    "type": "function",
+    "z": "sf-feed-cat",
+    "name": "Handle Event",
+    "func": "const PET_NAME = env.get('PET_NAME');\nconst MEAL_WINDOWS = JSON.parse(env.get('MEAL_WINDOWS'));\nconst CATCHUP_BUFFER_MIN = Number(env.get('CATCHUP_BUFFER_MIN'));\n\nconst pad = n => String(n).padStart(2, '0');\nfunction todayStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }\nfunction mealIdFor(windowName, d) { return `${windowName}_${todayStr(d)}`; }\nfunction emitEvent(event, extra) {\n    return { payload: Object.assign({ event, pet: PET_NAME, time: new Date().toISOString() }, extra) };\n}\nfunction feedMsgFor(windowName) {\n    const m = { payload: { deviceId: env.get('FEEDER_DEVICE_ID'), amount: Number(env.get('AMOUNT')) } };\n    m.meal = windowName;\n    m.topic = PET_NAME;\n    return m;\n}\n\n// --- Daily cleanup broadcast ---\nif (msg.payload === 'prune') {\n    const today = todayStr(new Date());\n    const staleFed = context.keys().filter(k => k.startsWith('fed_') && !k.endsWith(today));\n    staleFed.forEach(k => context.set(k, undefined));\n\n    const pending = context.get('pendingMeal');\n    let prunedPending = false;\n    if (pending && pending.cutoffTs < Date.now()) {\n        context.set('pendingMeal', undefined);\n        prunedPending = true;\n    }\n\n    node.status({ fill: 'grey', shape: 'ring', text: `pruned ${staleFed.length} fed flag(s)` });\n    return [null, emitEvent('pruned', { fedFlags: staleFed.length, pendingCleared: prunedPending })];\n}\n\n// --- Scheduled window-open trigger (payload is the window name string) ---\nconst windowIdx = MEAL_WINDOWS.findIndex(w => w.name === msg.payload);\nif (windowIdx !== -1) {\n    const window = MEAL_WINDOWS[windowIdx];\n\n    // Manual meal (e.g. dinner) - never dispense automatically, just tell\n    // whoever's watching 'Events' that the window opened and whether she's\n    // home yet. No pending/dedup state is touched, so an auto window later\n    // in the day is unaffected by this one being skipped.\n    if (window.auto === false) {\n        const home = context.get('lastLocation') === 'inside';\n        node.status({ fill: 'yellow', shape: 'ring', text: `${window.name}: manual (${home ? 'home' : 'not home'})` });\n        return [null, emitEvent('manual_reminder', { meal: window.name, home })];\n    }\n\n    const now = new Date();\n    const mealId = mealIdFor(window.name, now);\n    const dedupKey = 'fed_' + mealId;\n\n    if (context.get(dedupKey)) {\n        return [null, null]; // already handled this meal somehow\n    }\n\n    // Next window's start instant, wrapping to tomorrow's first window if\n    // this is the day's last one (e.g. dinner -> tomorrow's breakfast) -\n    // computed as a real timestamp so the wrap across midnight is automatic.\n    const next = MEAL_WINDOWS[(windowIdx + 1) % MEAL_WINDOWS.length];\n    const wrapsToTomorrow = windowIdx === MEAL_WINDOWS.length - 1;\n    const nextStart = new Date(now);\n    if (wrapsToTomorrow) nextStart.setDate(nextStart.getDate() + 1);\n    const [nh, nm] = next.start.split(':').map(Number);\n    nextStart.setHours(nh, nm, 0, 0);\n    const cutoffTs = nextStart.getTime() - CATCHUP_BUFFER_MIN * 60 * 1000;\n\n    const location = context.get('lastLocation');\n    if (location === 'inside') {\n        context.set(dedupKey, true);\n        context.set('pendingMeal', undefined);\n        node.status({ fill: 'green', shape: 'dot', text: `${window.name}: home, fed` });\n        return [feedMsgFor(window.name), emitEvent('fed', { meal: window.name, trigger: 'scheduled' })];\n    }\n\n    // Not home yet - give her until CATCHUP_BUFFER_MIN before the next\n    // window to walk in and still get this meal. Overwrites any earlier\n    // still-pending meal on purpose - no stacking makeup meals.\n    context.set('pendingMeal', { mealId, windowName: window.name, cutoffTs });\n    node.status({ fill: 'yellow', shape: 'ring', text: `${window.name}: not home, pending` });\n    return [null, emitEvent('pending', { meal: window.name, cutoffAt: new Date(cutoffTs).toISOString() })];\n}\n\n// --- Pet location update (payload = {id, name, location, where, since}) ---\nif (msg.payload && typeof msg.payload === 'object' && 'location' in msg.payload) {\n    if (msg.payload.name !== PET_NAME) {\n        return [null, null]; // not this instance's cat\n    }\n\n    const prevLocation = context.get('lastLocation');\n    context.set('lastLocation', msg.payload.location);\n    node.status({ fill: msg.payload.location === 'inside' ? 'green' : 'blue', shape: 'dot', text: msg.payload.location });\n\n    // surepetcare-pets emits the CURRENT location on every poll, not just on\n    // change - only a genuine outside -> inside transition is an arrival.\n    // Require a confirmed prior 'outside' reading, not just 'not inside':\n    // on the very first poll after deploy prevLocation is undefined, and a\n    // cat already home at startup shouldn't be treated as a fresh arrival.\n    if (prevLocation !== 'outside' || msg.payload.location !== 'inside') {\n        return [null, null];\n    }\n\n    const pending = context.get('pendingMeal');\n    if (!pending) {\n        node.status({ fill: 'green', shape: 'dot', text: 'inside, nothing pending' });\n        return [null, emitEvent('arrival', { fed: false, reason: 'no meal pending' })];\n    }\n    if (Date.now() > pending.cutoffTs) {\n        context.set('pendingMeal', undefined);\n        node.status({ fill: 'red', shape: 'dot', text: `missed ${pending.windowName}` });\n        return [null, emitEvent('missed', { meal: pending.windowName })];\n    }\n\n    const dedupKey = 'fed_' + pending.mealId;\n    if (context.get(dedupKey)) {\n        context.set('pendingMeal', undefined);\n        return [null, null];\n    }\n\n    context.set(dedupKey, true);\n    context.set('pendingMeal', undefined);\n    node.status({ fill: 'green', shape: 'dot', text: `catch-up ${pending.windowName}` });\n    return [feedMsgFor(pending.windowName), emitEvent('fed', { meal: pending.windowName, trigger: 'catch-up' })];\n}\n\nreturn [null, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 220,
+    "y": 100,
+    "wires": [["sf-feed"], []]
+  },
+  {
+    "id": "sf-feed",
+    "type": "petkit-feeder-control",
+    "z": "sf-feed-cat",
+    "name": "Feed",
+    "config": "feed-petkit-cfg",
+    "deviceId": "",
+    "amount": 20,
+    "x": 420,
+    "y": 60,
+    "wires": [[]]
+  },
+  {
+    "id": "feed-surepetcare-cfg",
+    "type": "surepetcare-config",
+    "name": "SurePetcare"
+  },
+  {
+    "id": "feed-petkit-cfg",
+    "type": "petkit-config",
+    "name": "PetKit"
+  },
+  {
+    "id": "feed-pets",
+    "type": "surepetcare-pets",
+    "z": "tab-feed-on-arrival",
+    "name": "Pet Locations",
+    "config": "feed-surepetcare-cfg",
+    "pollInterval": 60,
+    "x": 170,
+    "y": 140,
+    "wires": [["feed-laban", "feed-minoes"]]
+  },
+  {
+    "id": "feed-open-breakfast",
+    "type": "inject",
+    "z": "tab-feed-on-arrival",
+    "name": "Open breakfast",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "crontab": "0 7 * * *",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "breakfast",
+    "payloadType": "str",
+    "x": 180,
+    "y": 220,
+    "wires": [["feed-laban", "feed-minoes"]]
+  },
+  {
+    "id": "feed-open-lunch",
+    "type": "inject",
+    "z": "tab-feed-on-arrival",
+    "name": "Open lunch",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "crontab": "0 12 * * *",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "lunch",
+    "payloadType": "str",
+    "x": 170,
+    "y": 260,
+    "wires": [["feed-laban", "feed-minoes"]]
+  },
+  {
+    "id": "feed-open-dinner",
+    "type": "inject",
+    "z": "tab-feed-on-arrival",
+    "name": "Open dinner",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "crontab": "0 18 * * *",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "dinner",
+    "payloadType": "str",
+    "x": 170,
+    "y": 300,
+    "wires": [["feed-laban", "feed-minoes"]]
+  },
+  {
+    "id": "feed-prune-trigger",
+    "type": "inject",
+    "z": "tab-feed-on-arrival",
+    "name": "Daily Cleanup Trigger",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "crontab": "5 0 * * *",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "prune",
+    "payloadType": "str",
+    "x": 190,
+    "y": 340,
+    "wires": [["feed-laban", "feed-minoes"]]
+  },
+  {
+    "id": "feed-laban",
+    "type": "subflow:sf-feed-cat",
+    "z": "tab-feed-on-arrival",
+    "name": "Laban",
+    "env": [
+      { "name": "PET_NAME", "type": "str", "value": "Laban" },
+      { "name": "FEEDER_DEVICE_ID", "type": "str", "value": "" }
+    ],
+    "x": 440,
+    "y": 140,
+    "wires": [["feed-result-debug"], ["feed-events-debug"]]
+  },
+  {
+    "id": "feed-minoes",
+    "type": "subflow:sf-feed-cat",
+    "z": "tab-feed-on-arrival",
+    "name": "Minoes",
+    "env": [
+      { "name": "PET_NAME", "type": "str", "value": "Minoes" },
+      { "name": "FEEDER_DEVICE_ID", "type": "str", "value": "" }
+    ],
+    "x": 440,
+    "y": 220,
+    "wires": [["feed-result-debug"], ["feed-events-debug"]]
+  },
+  {
+    "id": "feed-result-debug",
+    "type": "debug",
+    "z": "tab-feed-on-arrival",
+    "name": "Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 680,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "feed-events-debug",
+    "type": "debug",
+    "z": "tab-feed-on-arrival",
+    "name": "Events",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 680,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "feed-catch",
+    "type": "catch",
+    "z": "tab-feed-on-arrival",
+    "name": "Catch Errors",
+    "scope": null,
+    "uncaught": false,
+    "x": 180,
+    "y": 440,
+    "wires": [["feed-error-debug"]]
+  },
+  {
+    "id": "feed-error-debug",
+    "type": "debug",
+    "z": "tab-feed-on-arrival",
+    "name": "Error",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "error",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 400,
+    "y": 440,
+    "wires": []
+  }
+]

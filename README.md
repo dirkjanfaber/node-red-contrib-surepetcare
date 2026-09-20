@@ -99,6 +99,10 @@ The `examples/` directory has ready-to-import flows (Node-RED menu -> Import -> 
   when the app's own curfew doesn't engage reliably.
 - **`daily-flap-rename.json`** - example of using the rename capability.
 - **`cat-ev-tracker.json`** - example pet-location tracking flow.
+- **`feed-on-arrival.json`** - dispenses each cat's breakfast/lunch/dinner via a
+  PetKit feeder, triggered by arrival through the flap (or by already being home when
+  the window opens). Requires `node-red-contrib-petkit` alongside this package - see
+  its own info panel for the full design.
 
 ## Installation
 
